@@ -17,6 +17,10 @@ void bayrepo_fill_input(void *blob, int position, double scaled_value);
 void bayrepo_fill_train(void *blob, int position, double scaled_value);
 void bayrepo_query(void *blob);
 double bayrepo_get_result(void *blob, int position);
-void bayrepo_train(void *blob, int epoch);
+void bayrepo_train(void *blob, int epoch, int use_dropout);
+void bayrepo_fill_hidden(void *blob, int index, int position_x, int position_y,
+		double scaled_value);
+void bayrepo_fill_outm(void *blob, int position_x, int position_y,
+		double scaled_value);
 
 #endif /* NEURO_H_ */

@@ -29,6 +29,7 @@ typedef struct _neuro_skeleton {
 	gsl_matrix **layers_delta;
 	gsl_matrix *temp;
 	gsl_matrix *train;
+	gsl_matrix *error;
 	int layers_numb;
 	activation activ;
 } neuro_skeleton;
@@ -44,9 +45,11 @@ extern unsigned long int gsl_rng_default_seed;
 		CLEAN_BLOB(); \
 	}
 
-#define DEBUGINFO(A, B, C) if (getenv("MATRIXD") && !strcmp(getenv("MATRIXD"),"1")) {\
+#define ISDEBUGINFO_BEG() if (getenv("MATRIXD") && !strcmp(getenv("MATRIXD"),"1")) {
+#define ISDEBUGINFO_END() }
+#define DEBUGINFO(A, B, C) ISDEBUGINFO_BEG()\
 		bayrepo_print_matrix(A, B, C); \
-}
+		ISDEBUGINFO_END()
 
 static void bayrepo_print_matrix(gsl_matrix *a, const char *matrix_name,
 		int index_matrix) {
@@ -110,6 +113,10 @@ void bayrepo_clean_neuro(void *blob) {
 			gsl_matrix_free(data->temp);
 			data->temp = NULL;
 		}
+		if (data->error) {
+			gsl_matrix_free(data->error);
+			data->error = NULL;
+		}
 		if (data->number_of_hidden > 0 && data->hidden_m) {
 			int i;
 			for (i = 0; i < data->number_of_hidden; i++) {
@@ -147,7 +154,8 @@ static int bayrepo_random_matrix(gsl_matrix *a, int m, int n, int is_negative) {
 
 	for (index = 0; index < m; index++) {
 		for (jndex = 0; jndex < n; jndex++) {
-			gsl_matrix_set(a, index, jndex, gsl_rng_uniform(r) - (is_negative?0.5:0.0));
+			gsl_matrix_set(a, index, jndex,
+					gsl_rng_uniform(r) - (is_negative ? 0.5 : 0.0));
 		}
 	}
 
@@ -173,6 +181,8 @@ void *bayrepo_init_neuro(int input, int output, int hidden, int hidden_num,
 	CLEAN_IF_NULL(input_m);
 	blob->train = gsl_matrix_alloc(1, output);
 	CLEAN_IF_NULL(train);
+	blob->error = gsl_matrix_alloc(1, output);
+	CLEAN_IF_NULL(error);
 
 	if (hidden_num) {
 		blob->output_m = gsl_matrix_alloc(hidden, output);
@@ -180,19 +190,19 @@ void *bayrepo_init_neuro(int input, int output, int hidden, int hidden_num,
 		blob->hidden_m = (gsl_matrix **) calloc(hidden_num,
 				sizeof(gsl_matrix *));
 		CLEAN_IF_NULL(hidden_m);
-		//blob->dropuot = (gsl_matrix **) calloc(hidden_num,
-		//		sizeof(gsl_matrix *));
-		//CLEAN_IF_NULL(dropuot);
+		blob->dropuot = (gsl_matrix **) calloc(hidden_num,
+				sizeof(gsl_matrix *));
+		CLEAN_IF_NULL(dropuot);
 		for (index = 1; index < hidden_num; index++) {
 			blob->hidden_m[index] = gsl_matrix_alloc(hidden, hidden);
 			CLEAN_IF_NULL(hidden_m[index]);
-			//blob->dropuot[index] = gsl_matrix_alloc(1, hidden);
-			//CLEAN_IF_NULL(dropuot[index]);
+			blob->dropuot[index] = gsl_matrix_alloc(1, hidden);
+			CLEAN_IF_NULL(dropuot[index]);
 		}
 		blob->hidden_m[0] = gsl_matrix_alloc(input, hidden);
 		CLEAN_IF_NULL(hidden_m[0]);
-		//blob->dropuot[0] = gsl_matrix_alloc(1, hidden);
-		//CLEAN_IF_NULL(dropuot[0]);
+		blob->dropuot[0] = gsl_matrix_alloc(1, hidden);
+		CLEAN_IF_NULL(dropuot[0]);
 		blob->temp = gsl_matrix_alloc(1, hidden);
 		CLEAN_IF_NULL(temp);
 	} else {
@@ -208,7 +218,8 @@ void *bayrepo_init_neuro(int input, int output, int hidden, int hidden_num,
 	gsl_matrix_set_zero(blob->input_m);
 	gsl_matrix_set_zero(blob->train);
 	if (hidden_num) {
-		if (bayrepo_random_matrix(blob->output_m, hidden, output, (activ==RELU?0:1)) < 0) {
+		if (bayrepo_random_matrix(blob->output_m, hidden, output,
+				(activ == RELU ? 0 : 1)) < 0) {
 			CLEAN_BLOB()
 ;		}
 		for (index = 1; index < hidden_num; index++) {
@@ -304,6 +315,23 @@ void bayrepo_fill_train(void *blob, int position, double scaled_value) {
 	}
 }
 
+void bayrepo_fill_hidden(void *blob, int index, int position_x, int position_y,
+		double scaled_value) {
+	if (blob) {
+		neuro_skeleton *data = (neuro_skeleton *) blob;
+		gsl_matrix_set(data->hidden_m[index], position_x, position_y,
+				scaled_value);
+	}
+}
+
+void bayrepo_fill_outm(void *blob, int position_x, int position_y,
+		double scaled_value) {
+	if (blob) {
+		neuro_skeleton *data = (neuro_skeleton *) blob;
+		gsl_matrix_set(data->output_m, position_x, position_y, scaled_value);
+	}
+}
+
 static void bayrepo_zero_layers(void *blob) {
 	if (blob) {
 		neuro_skeleton *data = (neuro_skeleton *) blob;
@@ -356,16 +384,19 @@ static void bayrepo_matix_deriv(gsl_matrix *a, int size, neuro_skeleton *data) {
 static void bayrepo_query_internal(void *blob, int dropout) {
 	int index;
 	if (blob) {
+		ISDEBUGINFO_BEG()
+			printf("=====================Query=========================\n");
+		ISDEBUGINFO_END()
 		neuro_skeleton *data = (neuro_skeleton *) blob;
 		bayrepo_zero_layers(blob);
 
 		if (data->number_of_hidden) {
-			//if (dropout == 1) {
-			//	for (index = 0; index < data->number_of_hidden; index++) {
-			//		bayrepo_fill_dropout(data->dropuot[index], 1,
-			//				data->hidden_l);
-			//	}
-			//}
+			if (dropout == 1) {
+				for (index = 0; index < data->number_of_hidden; index++) {
+					bayrepo_fill_dropout(data->dropuot[index], 1,
+							data->hidden_l);
+				}
+			}
 			int cnt = 0;
 			gsl_blas_dgemm(CblasNoTrans, CblasNoTrans, 1.0, data->input_m,
 					data->hidden_m[0], 0.0, data->layers[0]);
@@ -391,12 +422,12 @@ static void bayrepo_query_internal(void *blob, int dropout) {
 			gsl_blas_dgemm(CblasNoTrans, CblasNoTrans, 1.0,
 					data->layers[cnt - 1], data->output_m, 0.0,
 					data->layers[cnt]);
-			bayrepo_matix_customize(data->layers[cnt], data->output_l, data);
+			//bayrepo_matix_customize(data->layers[cnt], data->output_l, data);
 
 		} else {
 			gsl_blas_dgemm(CblasNoTrans, CblasNoTrans, 1.0, data->input_m,
 					data->output_m, 0.0, data->layers[0]);
-			bayrepo_matix_customize(data->layers[0], data->output_l, data);
+			//bayrepo_matix_customize(data->layers[0], data->output_l, data);
 		}
 
 		DEBUGINFO(data->input_m, "INPUTM", -1);
@@ -406,6 +437,9 @@ static void bayrepo_query_internal(void *blob, int dropout) {
 			}
 		}
 		DEBUGINFO(data->output_m, "OUTPUTM", -1);
+		for (index = 0; index < data->layers_numb; index++) {
+			DEBUGINFO(data->layers[index], "LAYER", index);
+		}
 	}
 }
 
@@ -424,16 +458,41 @@ double bayrepo_get_result(void *blob, int position) {
 	return -10000.0;
 }
 
-void bayrepo_train(void *blob, int epoch) {
+double bayrepo_get_sum(gsl_matrix *a) {
+	double result = 0.0;
+	int index, jndex = 0;
+	for (index = 0; index < a->size1; index++) {
+		for (jndex = 0; jndex < a->size2; jndex++) {
+			result += gsl_matrix_get(a, index, jndex);
+		}
+	}
+	return result;
+}
+
+void bayrepo_train(void *blob, int epoch, int use_dropout) {
 	int index;
 	if (blob) {
 		while (epoch--) {
+			ISDEBUGINFO_BEG()
+				printf(
+						"=====================Epoch %d=========================\n",
+						epoch);
+			ISDEBUGINFO_END()
 			neuro_skeleton *data = (neuro_skeleton *) blob;
-			bayrepo_query_internal(blob, 0);
+			bayrepo_query_internal(blob, use_dropout);
 			gsl_matrix_memcpy(data->layers_delta[data->layers_numb - 1],
 					data->layers[data->layers_numb - 1]);
+			ISDEBUGINFO_BEG()
+				gsl_matrix_memcpy(data->error,
+						data->layers[data->layers_numb - 1]);
+			ISDEBUGINFO_END();
 			gsl_matrix_sub(data->layers_delta[data->layers_numb - 1],
 					data->train);
+			ISDEBUGINFO_BEG()
+				gsl_matrix_sub(data->error, data->train);
+				gsl_matrix_mul_elements(data->error, data->error);
+				printf("=======>Error=%f\n", bayrepo_get_sum(data->error));
+			ISDEBUGINFO_END();
 			if (data->number_of_hidden) {
 				int index;
 				for (index = (data->layers_numb - 2); index >= 0; index--) {
@@ -454,10 +513,12 @@ void bayrepo_train(void *blob, int epoch) {
 							data->temp);
 				}
 
-				//for (index = 0; index < data->number_of_hidden; index++) {
-				//	gsl_matrix_mul_elements(data->layers_delta[index],
-				//			data->dropuot[index]);
-				//}
+				if (use_dropout) {
+					for (index = 0; index < data->number_of_hidden; index++) {
+						gsl_matrix_mul_elements(data->layers_delta[index],
+								data->dropuot[index]);
+					}
+				}
 
 				for (index = (data->layers_numb - 1); index >= 0; index--) {
 					if (index == (data->layers_numb - 1)) {
@@ -481,7 +542,6 @@ void bayrepo_train(void *blob, int epoch) {
 						data->output_m);
 			}
 			for (index = 0; index < data->layers_numb; index++) {
-				DEBUGINFO(data->layers[index], "LAYER", index);
 				DEBUGINFO(data->layers_delta[index], "LAYER_DELTA", index);
 			}
 		}
