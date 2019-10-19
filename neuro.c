@@ -12,6 +12,8 @@
 #include <gsl/gsl_matrix.h>
 #include <gsl/gsl_blas.h>
 #include <gsl/gsl_rng.h>
+#include <png.h>
+#include <malloc.h>
 
 #include "neuro.h"
 
@@ -546,5 +548,108 @@ void bayrepo_train(void *blob, int epoch, int use_dropout) {
 			}
 		}
 	}
+}
+
+int bayrepo_write_matrix(void *blob, FILE *fp, int width, int height) {
+	int code = 0;
+	png_structp png_ptr = NULL;
+	png_infop info_ptr = NULL;
+	png_bytep row = NULL;
+	if ((blob == NULL) || (fp == NULL)) {
+		return -1;
+	}
+
+	png_ptr = png_create_write_struct(PNG_LIBPNG_VER_STRING, NULL, NULL, NULL);
+	if (png_ptr == NULL) {
+		code = -3;
+		goto finalise;
+	}
+
+	info_ptr = png_create_info_struct(png_ptr);
+	if (info_ptr == NULL) {
+		code = -4;
+		goto finalise;
+	}
+
+	if (setjmp(png_jmpbuf(png_ptr))) {
+		code = -5;
+		goto finalise;
+	}
+
+	png_init_io(png_ptr, fp);
+
+	neuro_skeleton *data = (neuro_skeleton *) blob;
+
+	int picSize = (height + 3) + (height + 3) * data->number_of_hidden;
+
+	png_set_IHDR(png_ptr, info_ptr, width, picSize, 8, PNG_COLOR_TYPE_GRAY,
+	PNG_INTERLACE_NONE,
+	PNG_COMPRESSION_TYPE_BASE, PNG_FILTER_TYPE_BASE);
+
+	png_write_info(png_ptr, info_ptr);
+
+	row = (png_bytep) malloc(3 * width * sizeof(png_byte));
+	if (!row) {
+		code = -5;
+		goto finalise;
+	}
+
+	int index = 0;
+	for (index = 0; index < data->number_of_hidden + 1; index++) {
+		gsl_matrix * m = NULL;
+		if (data->number_of_hidden) {
+			m = (index == data->number_of_hidden) ?
+					data->output_m : data->hidden_m[index];
+		} else {
+			m = data->output_m;
+		}
+
+		double rangeMax = gsl_matrix_max(m);
+		double rangeMin = gsl_matrix_min(m);
+
+		if (((width / m->size1) == 0) || ((height / m->size2) == 0)) {
+			return -2;
+		}
+
+		int sizeX = width / m->size1;
+		int sizeY = height / m->size2;
+
+		int x, y;
+		for (y = 0; y < height; y++) {
+			for (x = 0; x < width; x++) {
+				int curX = x / sizeX;
+				int curY = y / sizeY;
+				if ((curX >= m->size1) || (curY >= m->size2)) {
+					row[x] = (png_byte) 255;
+				} else {
+					png_byte res_color = (png_byte) ((gsl_matrix_get(m, curX,
+							curY) - rangeMin) / (rangeMax - rangeMin) * 255.0);
+					row[x] = (png_byte) res_color;
+				}
+			}
+			png_write_row(png_ptr, row);
+		}
+		for (y = 0; y < 3; y++) {
+			for (x = 0; x < width; x++) {
+				if (y != 1) {
+					row[x] = (png_byte) 255;
+				} else {
+					row[x] = (png_byte) 0;
+				}
+			}
+			png_write_row(png_ptr, row);
+		}
+	}
+
+	png_write_end(png_ptr, NULL);
+
+	finalise: if (info_ptr != NULL)
+		png_free_data(png_ptr, info_ptr, PNG_FREE_ALL, -1);
+	if (png_ptr != NULL)
+		png_destroy_write_struct(&png_ptr, (png_infopp) NULL);
+	if (row != NULL)
+		free(row);
+	return code;
+
 }
 

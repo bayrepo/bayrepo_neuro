@@ -22,5 +22,6 @@ void bayrepo_fill_hidden(void *blob, int index, int position_x, int position_y,
 		double scaled_value);
 void bayrepo_fill_outm(void *blob, int position_x, int position_y,
 		double scaled_value);
+int bayrepo_write_matrix(void *blob, FILE *fp, int width, int height);
 
 #endif /* NEURO_H_ */
