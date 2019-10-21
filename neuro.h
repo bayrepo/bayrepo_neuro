@@ -8,7 +8,7 @@
 #ifndef NEURO_H_
 #define NEURO_H_
 
-typedef enum _activation {RELU=0, SIGMOID, TANH} activation;
+typedef enum _activation {RELU=0, SIGMOID, TANH, NOACTIV, DEFLT} activation;
 
 void bayrepo_clean_neuro(void *blob);
 void *bayrepo_init_neuro(int input, int output, int hidden, int hidden_num,
@@ -23,5 +23,7 @@ void bayrepo_fill_hidden(void *blob, int index, int position_x, int position_y,
 void bayrepo_fill_outm(void *blob, int position_x, int position_y,
 		double scaled_value);
 int bayrepo_write_matrix(void *blob, FILE *fp, int width, int height);
+void bayrepo_set_layer_activ(void * blob, int layer_number, activation activ);
+activation bayrepo_get_layer_func(void *blob, int lyn);
 
 #endif /* NEURO_H_ */

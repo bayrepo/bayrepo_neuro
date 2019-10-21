@@ -34,6 +34,7 @@ typedef struct _neuro_skeleton {
 	gsl_matrix *error;
 	int layers_numb;
 	activation activ;
+	activation *activ_l;
 } neuro_skeleton;
 
 const gsl_rng_type * T;
@@ -119,6 +120,10 @@ void bayrepo_clean_neuro(void *blob) {
 			gsl_matrix_free(data->error);
 			data->error = NULL;
 		}
+		if (data->activ_l){
+			free(data->activ_l);
+			data->activ_l = NULL;
+		}
 		if (data->number_of_hidden > 0 && data->hidden_m) {
 			int i;
 			for (i = 0; i < data->number_of_hidden; i++) {
@@ -145,6 +150,21 @@ void bayrepo_clean_neuro(void *blob) {
 	if (r) {
 		gsl_rng_free(r);
 		r = NULL;
+	}
+}
+
+void bayrepo_set_layer_activ(void * blob, int layer_number, activation activ){
+	if (blob) {
+			neuro_skeleton *data = (neuro_skeleton *) blob;
+			if (data->number_of_hidden){
+				if (layer_number <= data->number_of_hidden){
+					data->activ_l[layer_number] = activ;
+				}
+			} else {
+				if (!layer_number){
+					data->activ_l[0]=activ;
+				}
+			}
 	}
 }
 
@@ -275,6 +295,15 @@ void *bayrepo_init_neuro(int input, int output, int hidden, int hidden_num,
 		CLEAN_IF_NULL(layers_delta[0]);
 	}
 	blob->activ = activ;
+	blob->activ_l = calloc(blob->number_of_hidden + 1, sizeof(activation));
+	CLEAN_IF_NULL(activ_l);
+	for(index=0; index < (blob->number_of_hidden + 1); index++){
+		if (index == blob->number_of_hidden){
+			blob->activ_l[index] = NOACTIV;
+		} else {
+			blob->activ_l[index] = DEFLT;
+		}
+	}
 
 	return (void *) blob;
 }
@@ -344,42 +373,64 @@ static void bayrepo_zero_layers(void *blob) {
 	}
 }
 
-static double bayrepo_activation_func(double elem, neuro_skeleton *data) {
-	switch (data->activ) {
+static double bayrepo_activation_func(double elem, neuro_skeleton *data, int lyn) {
+	activation act = data->activ;
+	if ((lyn < (data->number_of_hidden + 1)) && (data->activ_l[lyn]!=DEFLT)){
+		act = data->activ_l[lyn];
+	}
+	switch (act) {
 	case RELU:
 		return elem > 0.0 ? elem : 0.0;
 	case TANH:
 		return tanh(elem);
-	default:
+	case SIGMOID:
 		return 1.0 / (1.0 + exp(-elem));
+	default:
+		return elem;
 	}
 }
 
-static double bayrepo_activation_deriv(double elem, neuro_skeleton *data) {
-	switch (data->activ) {
+activation bayrepo_get_layer_func(void *blob, int lyn){
+	if (blob) {
+		neuro_skeleton *data = (neuro_skeleton *) blob;
+		if ((lyn < (data->number_of_hidden + 1)) && (data->activ_l[lyn]!=DEFLT)){
+			return data->activ_l[lyn];
+		}
+	}
+	return NOACTIV;
+}
+
+static double bayrepo_activation_deriv(double elem, neuro_skeleton *data, int lyn) {
+	activation act = data->activ;
+	if ((lyn < (data->number_of_hidden + 1)) && (data->activ_l[lyn]!=DEFLT)){
+		act = data->activ_l[lyn];
+	}
+	switch (act) {
 	case RELU:
 		return elem > 0.0 ? 1.0 : 0.0;
 	case TANH:
 		return 1.0 - (elem * elem);
-	default:
+	case SIGMOID:
 		return elem * (1.0 - elem);
+	default:
+		return elem;
 	}
 }
 
 static void bayrepo_matix_customize(gsl_matrix *a, int size,
-		neuro_skeleton *data) {
+		neuro_skeleton *data, int lyn) {
 	int index;
 	for (index = 0; index < size; index++) {
 		gsl_matrix_set(a, 0, index,
-				bayrepo_activation_func(gsl_matrix_get(a, 0, index), data));
+				bayrepo_activation_func(gsl_matrix_get(a, 0, index), data, lyn));
 	}
 }
 
-static void bayrepo_matix_deriv(gsl_matrix *a, int size, neuro_skeleton *data) {
+static void bayrepo_matix_deriv(gsl_matrix *a, int size, neuro_skeleton *data, int lyn) {
 	int index;
 	for (index = 0; index < size; index++) {
 		gsl_matrix_set(a, 0, index,
-				bayrepo_activation_deriv(gsl_matrix_get(a, 0, index), data));
+				bayrepo_activation_deriv(gsl_matrix_get(a, 0, index), data, lyn));
 	}
 }
 
@@ -402,7 +453,7 @@ static void bayrepo_query_internal(void *blob, int dropout) {
 			int cnt = 0;
 			gsl_blas_dgemm(CblasNoTrans, CblasNoTrans, 1.0, data->input_m,
 					data->hidden_m[0], 0.0, data->layers[0]);
-			bayrepo_matix_customize(data->layers[0], data->hidden_l, data);
+			bayrepo_matix_customize(data->layers[0], data->hidden_l, data, 0);
 			if (dropout == 1) {
 				gsl_matrix_mul_elements(data->layers[0], data->dropuot[0]);
 				gsl_matrix_scale(data->layers[0], 2.0);
@@ -413,7 +464,7 @@ static void bayrepo_query_internal(void *blob, int dropout) {
 						data->layers[index - 1], data->hidden_m[index], 0.0,
 						data->layers[index]);
 				bayrepo_matix_customize(data->layers[index], data->hidden_l,
-						data);
+						data, index);
 				if (dropout == 1) {
 					gsl_matrix_mul_elements(data->layers[index],
 							data->dropuot[index]);
@@ -424,12 +475,12 @@ static void bayrepo_query_internal(void *blob, int dropout) {
 			gsl_blas_dgemm(CblasNoTrans, CblasNoTrans, 1.0,
 					data->layers[cnt - 1], data->output_m, 0.0,
 					data->layers[cnt]);
-			//bayrepo_matix_customize(data->layers[cnt], data->output_l, data);
+			bayrepo_matix_customize(data->layers[cnt], data->output_l, data, cnt);
 
 		} else {
 			gsl_blas_dgemm(CblasNoTrans, CblasNoTrans, 1.0, data->input_m,
 					data->output_m, 0.0, data->layers[0]);
-			//bayrepo_matix_customize(data->layers[0], data->output_l, data);
+			bayrepo_matix_customize(data->layers[0], data->output_l, data, 0);
 		}
 
 		DEBUGINFO(data->input_m, "INPUTM", -1);
@@ -500,7 +551,7 @@ void bayrepo_train(void *blob, int epoch, int use_dropout) {
 				for (index = (data->layers_numb - 2); index >= 0; index--) {
 					gsl_matrix_set_zero(data->temp);
 					gsl_matrix_memcpy(data->temp, data->layers[index]);
-					bayrepo_matix_deriv(data->temp, data->hidden_l, data);
+					bayrepo_matix_deriv(data->temp, data->hidden_l, data, index);
 					if (index == (data->layers_numb - 2)) {
 						gsl_blas_dgemm(CblasNoTrans, CblasTrans, 1.0,
 								data->layers_delta[index + 1], data->output_m,
