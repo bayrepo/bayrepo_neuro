@@ -2,7 +2,7 @@
 
 Build
 
-gcc -o web_test3 neuro_web.c neuro.c libcivetweb.a -lpthread -lgsl -lm -lpng
+gcc -o web_test3 neuro_web.c neuro.c libcivetweb.a -lpthread -lgsl -lm -lpng -lcrypto
 
 Depends on
 
