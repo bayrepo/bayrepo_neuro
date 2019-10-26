@@ -5,6 +5,8 @@
  *      Author: alexey
  */
 
+#define _GNU_SOURCE
+
 #include <stdio.h>
 #include <unistd.h>
 
@@ -210,6 +212,12 @@ static int web_IndexHandler(struct mg_connection *conn, void *cbdata) {
 	return 1;
 }
 
+static void web_clean_AddHandlerForm(AddHandlerForm *form) {
+	if (form->netName) {
+		free(form->netName);
+	}
+}
+
 static int web_field_found_AddForm(const char *key, const char *filename,
 		char *path, size_t pathlen, void *user_data) {
 	return MG_FORM_FIELD_STORAGE_GET;
@@ -323,6 +331,7 @@ static int web_AddHandler(struct mg_connection *conn, void *cbdata) {
 	ret = mg_handle_form_request(conn, &fdh);
 	if (ret > 0) {
 		ret2 = web_add_new_net(&form_container, result_error);
+		web_clean_AddHandlerForm(&form_container);
 		if (!ret2) {
 			mg_send_http_redirect(conn, "/", 302);
 			return 1;
@@ -404,6 +413,7 @@ static int web_AddHandler(struct mg_connection *conn, void *cbdata) {
 	mg_printf(conn, "\n");
 	mg_printf(conn, "  </body>\n");
 	mg_printf(conn, "</html>\n");
+	web_clean_AddHandlerForm(&form_container);
 	return 1;
 }
 
@@ -733,8 +743,40 @@ typedef struct __FormItem {
 
 typedef struct __InputHandlerForm {
 	FormItem *head;
+	int ajax;
+	FormItem *expect;
+	FormItem *exp_head;
 	struct mg_connection *conn;
 } InputHandlerForm;
+
+static void web_clear_InputHandlerForm(InputHandlerForm *form) {
+	FormItem *item;
+	FormItem *item_old;
+	if (form->head) {
+		item = form->head;
+		while (item) {
+			item_old = item;
+			item = item->next;
+			free(item_old);
+		}
+	}
+	if (form->expect) {
+		item = form->expect;
+		while (item) {
+			item_old = item;
+			item = item->next;
+			free(item_old);
+		}
+	}
+	if (form->exp_head) {
+		item = form->exp_head;
+		while (item) {
+			item_old = item;
+			item = item->next;
+			free(item_old);
+		}
+	}
+}
 
 static int web_field_found_InputForm(const char *key, const char *filename,
 		char *path, size_t pathlen, void *user_data) {
@@ -743,7 +785,7 @@ static int web_field_found_InputForm(const char *key, const char *filename,
 
 static int web_field_get_InputForm(const char *key, const char *value,
 		size_t valuelen, void *user_data) {
-	AddHandlerForm *form = (AddHandlerForm *) user_data;
+	InputHandlerForm *form = (InputHandlerForm *) user_data;
 	if ((key != NULL) && (key[0] == '\0')) {
 		return MG_FORM_FIELD_HANDLE_ABORT;
 	}
@@ -752,75 +794,62 @@ static int web_field_get_InputForm(const char *key, const char *value,
 	}
 
 	if (key) {
-		if (!strcmp(key, "netname")) {
-			form->netName =
-					value[0] ? strndup(value, valuelen) : strdup("defnet");
-			NOT_ENOUGH_MEMORY(form->netName);
-		} else if (!strcmp(key, "inputs")) {
-			int vl = 0;
-			vl = atoi(value);
-			form->inputs = (vl > 0) ? vl : 1;
-		} else if (!strcmp(key, "outputs")) {
-			int vl = 0;
-			vl = atoi(value);
-			form->outputs = (vl > 0) ? vl : 1;
-		} else if (!strcmp(key, "hidd")) {
-			int vl = 0;
-			vl = atoi(value);
-			form->hidd = (vl > 0) ? vl : 0;
-		} else if (!strcmp(key, "hiddnets")) {
-			int vl = 0;
-			vl = atoi(value);
-			form->hid_nets = (vl > 0) ? vl : 0;
-		} else if (!strcmp(key, "lnspd")) {
-			double vl = 0.0;
-			char *ptr;
-			vl = strtod(value, &ptr);
-			form->learn_spd = (vl > 0.0) ? vl : 0.2;
-		} else if (!strcmp(key, "activg")) {
-			int vl = atoi(value);
-			switch (vl) {
-			case 0:
-				form->act = SIGMOID;
-				break;
-			case 1:
-				form->act = TANH;
-				break;
-			case 2:
-				form->act = RELU;
-				break;
-			case 3:
-				form->act = NOACTIV;
-				break;
-			default:
-				form->act = DEFLT;
-				break;
-			}
-		} else if (strstr(key, "activl_")) {
-			const char *p = key + strlen("activl_");
+		if (!strcmp(key, "ajax")) {
+			form->ajax = 1;
+		} else if (strstr(key, "fin2_")) {
+			const char *p = key + strlen("fin2_");
 			int kn = atoi(p);
-			int vl = atoi(value);
-			if (kn < MAX_ACT_LAYERS) {
-				switch (vl) {
-				case 0:
-					form->flist[kn] = SIGMOID;
-					break;
-				case 1:
-					form->flist[kn] = TANH;
-					break;
-				case 2:
-					form->flist[kn] = RELU;
-					break;
-				case 3:
-					form->flist[kn] = NOACTIV;
-					break;
-				default:
-					form->flist[kn] = DEFLT;
-					break;
+			char *ptr;
+			double vl = strtod(value, &ptr);
+			FormItem *item = calloc(1, sizeof(FormItem));
+			NOT_ENOUGH_MEMORY(item);
+			item->number = kn;
+			item->value = vl;
+			if (form->head) {
+				FormItem *iterator = form->head;
+				while (iterator->next) {
+					iterator = iterator->next;
 				}
+				iterator->next = item;
+			} else {
+				form->head = item;
 			}
-		} else if (!strcmp(key, "drp")) {
-			form->dropout = 1;
+		} else if (strstr(key, "tin2_")) {
+			const char *p = key + strlen("tin2_");
+			int kn = atoi(p);
+			char *ptr;
+			double vl = strtod(value, &ptr);
+			FormItem *item = calloc(1, sizeof(FormItem));
+			NOT_ENOUGH_MEMORY(item);
+			item->number = kn;
+			item->value = vl;
+			if (form->exp_head) {
+				FormItem *iterator = form->exp_head;
+				while (iterator->next) {
+					iterator = iterator->next;
+				}
+				iterator->next = item;
+			} else {
+				form->exp_head = item;
+			}
+		} else if (strstr(key, "tine2_")) {
+			const char *p = key + strlen("tine2_");
+			int kn = atoi(p);
+			char *ptr;
+			double vl = strtod(value, &ptr);
+			FormItem *item = calloc(1, sizeof(FormItem));
+			NOT_ENOUGH_MEMORY(item);
+			item->number = kn;
+			item->value = vl;
+			if (form->expect) {
+				FormItem *iterator = form->expect;
+				while (iterator->next) {
+					iterator = iterator->next;
+				}
+				iterator->next = item;
+			} else {
+				form->expect = item;
+			}
 		}
 	}
 
@@ -850,14 +879,325 @@ static int web_InputHandler(struct mg_connection *conn, void *cbdata) {
 		id = atoi(dash + 1);
 	}
 
+	InputHandlerForm form_container;
+	memset(&form_container, 0, sizeof(InputHandlerForm));
+	form_container.conn = conn;
+	struct mg_form_data_handler fdh =
+			{ web_field_found_InputForm, web_field_get_InputForm,
+					web_field_stored_InputForm, &form_container };
+
+	int ret = mg_handle_form_request(conn, &fdh);
 	pthread_rwlock_wrlock(&m_globalNeuro);
 	neuro_item *item = web_get_neuro(id);
 	if (item) {
 		snprintf(buf, MAX_ACT_LAYERS, "%s/%d", GET_URI, id);
+		if (ret > 0) {
+			if (form_container.head) {
+				for (index = 0; index < item->inputs; index++) {
+					bayrepo_fill_input(item->net, index, 0.0);
+				}
+				FormItem *iterator = form_container.head;
+				while (iterator) {
+					if (iterator->number < item->inputs) {
+						bayrepo_fill_input(item->net, iterator->number,
+								iterator->value);
+					}
+					iterator = iterator->next;
+				}
+				bayrepo_query(item->net);
+			} else if (form_container.exp_head) {
+				for (index = 0; index < item->inputs; index++) {
+					bayrepo_fill_input(item->net, index, 0.0);
+				}
+				for (index = 0; index < item->outputs; index++) {
+					bayrepo_fill_train(item->net, index, 0.0);
+				}
+				FormItem *iterator = form_container.exp_head;
+				while (iterator) {
+					if (iterator->number < item->inputs) {
+						bayrepo_fill_input(item->net, iterator->number,
+								iterator->value);
+					}
+					iterator = iterator->next;
+				}
+				iterator = form_container.expect;
+				while (iterator) {
+					if (iterator->number < item->outputs) {
+						bayrepo_fill_train(item->net, iterator->number,
+								iterator->value);
+					}
+					iterator = iterator->next;
+				}
+				bayrepo_train(item->net, 1, item->dropout);
+			}
+		}
 
 	} else {
 		snprintf(buf, MAX_ACT_LAYERS, "/");
 	}
+
+	if (form_container.ajax) {
+		mg_send_http_ok(conn, "text/plain", MAX_PAGE_LEN);
+
+		if (form_container.head) {
+			mg_printf(conn, "TYPE:RESULT\n");
+			if (item) {
+				for (index = 0; index < item->outputs; index++) {
+					mg_printf(conn, "%d:%f\n", index,
+							bayrepo_get_result(item->net, index));
+				}
+			}
+		} else if (form_container.exp_head) {
+			mg_printf(conn, "TYPE:TRAINING\n");
+		}
+
+		web_clear_InputHandlerForm(&form_container);
+		pthread_rwlock_unlock(&m_globalNeuro);
+		return 1;
+	}
+
+	web_clear_InputHandlerForm(&form_container);
+	pthread_rwlock_unlock(&m_globalNeuro);
+
+	mg_send_http_redirect(conn, buf, 302);
+	return 1;
+}
+
+typedef struct __FileHandlerForm {
+	char *result;
+	char *training;
+	int size;
+	int ajax;
+	struct mg_connection *conn;
+} FileHandlerForm;
+
+static void web_clear_FileHandlerForm(FileHandlerForm *form) {
+	if (form->result)
+		free(form->result);
+	if (form->training)
+		free(form->training);
+}
+
+static int web_field_found_FileForm(const char *key, const char *filename,
+		char *path, size_t pathlen, void *user_data) {
+	return MG_FORM_FIELD_STORAGE_GET;
+}
+
+static int web_field_get_FileForm(const char *key, const char *value,
+		size_t valuelen, void *user_data) {
+	FileHandlerForm *form = (FileHandlerForm *) user_data;
+	if ((key != NULL) && (key[0] == '\0')) {
+		return MG_FORM_FIELD_HANDLE_ABORT;
+	}
+	if ((valuelen > 0) && (value == NULL)) {
+		return MG_FORM_FIELD_HANDLE_ABORT;
+	}
+
+	if (key) {
+		if (!strcmp(key, "ajax")) {
+			form->ajax = 1;
+		} else if (!strcmp(key, "fin1")) {
+			form->result = calloc(1, valuelen);
+			NOT_ENOUGH_MEMORY(form->result);
+			memcpy(form->result, value, valuelen);
+			form->size = valuelen;
+		} else if (!strcmp(key, "tin1")) {
+			form->training = calloc(1, valuelen);
+			NOT_ENOUGH_MEMORY(form->training);
+			memcpy(form->training, value, valuelen);
+			form->size = valuelen;
+		}
+	}
+	return 0;
+}
+
+static int web_field_stored_FileForm(const char *path, long long file_size,
+		void *user_data) {
+	return 0;
+}
+
+/*
+ * RESULT FORMAT
+ * [input pin]:[value double]\n
+ * ...
+ * [input pin]:[value double]\n
+ *
+ * TRAIN FORMAT
+ * EPO:[number_of_sets]:[epoch training int]\n
+ * INP:[input pin]:[value double]\n
+ * ...
+ * INP:[input pin]:[value double]\n
+ * EXP:[output pib]:[value double]\n
+ * ...
+ * EXP:[output pib]:[value double]\n
+ * END:0:0.0
+ */
+typedef struct __TrainingSet {
+	int number_of_sets;
+	int epochs;
+	double *inputs;
+	double *results;
+} TrainingSet;
+
+static int web_FileHandler(struct mg_connection *conn, void *cbdata) {
+	char * line = NULL;
+	ssize_t rd;
+	size_t len = 0;
+	const struct mg_request_info *req_info = mg_get_request_info(conn);
+	int id = 0;
+	int index = 0;
+	char buf[MAX_ACT_LAYERS];
+
+	char *uri = strdup(req_info->request_uri);
+	NOT_ENOUGH_MEMORY(uri);
+
+	char *dash = strchr(uri + 1, '/');
+	if (dash) {
+		char *secondDash = strchr(dash + 1, '/');
+		if (secondDash) {
+			*secondDash = 0;
+		}
+		id = atoi(dash + 1);
+	}
+
+	FileHandlerForm form_container;
+	memset(&form_container, 0, sizeof(FileHandlerForm));
+	form_container.conn = conn;
+	struct mg_form_data_handler fdh = { web_field_found_FileForm,
+			web_field_get_FileForm, web_field_stored_FileForm, &form_container };
+
+	int ret = mg_handle_form_request(conn, &fdh);
+	pthread_rwlock_wrlock(&m_globalNeuro);
+	neuro_item *item = web_get_neuro(id);
+	if (item) {
+		snprintf(buf, MAX_ACT_LAYERS, "%s/%d", GET_URI, id);
+		if (ret > 0) {
+			if (form_container.result) {
+				FILE *fp = fmemopen((void*) form_container.result,
+						form_container.size, "r");
+				if (fp) {
+					while ((rd = getline(&line, &len, fp)) != -1) {
+						if (rd > 0) {
+							char *ptr1 = line;
+							char *ptr2 = strchr(ptr1, ':');
+							if (ptr2) {
+								*ptr2 = 0;
+								ptr2++;
+								int nmb = atoi(ptr1);
+								char *ptr_tmp;
+								double value = strtod(ptr2, &ptr_tmp);
+								if (nmb < item->inputs) {
+									bayrepo_fill_input(item->net, nmb, value);
+								}
+							}
+						}
+					}
+					fclose(fp);
+					if (line)
+						free(line);
+					line = NULL;
+					bayrepo_query(item->net);
+				}
+			} else if (form_container.training) {
+				FILE *fp = fmemopen((void*) form_container.training,
+						form_container.size, "r");
+				if (fp) {
+					int ind = 0;
+					TrainingSet ts = { 0 };
+					while ((rd = getline(&line, &len, fp)) != -1) {
+						if (rd > 0) {
+							char *ptr1 = line;
+							char *ptr2 = strchr(ptr1, ':');
+							if (ptr2) {
+								*ptr2 = 0;
+								ptr2++;
+								char *ptr3 = strchr(ptr2, ':');
+								if (ptr3) {
+									char *ptr4 = strchr(ptr3, '\n');
+									if (ptr4)
+										*ptr4 = 0;
+									if (!strcmp(ptr1, "EPO")) {
+										ts.number_of_sets = atoi(ptr2);
+										ts.epochs = atoi(ptr3);
+										ts.inputs = calloc(ts.number_of_sets,
+												sizeof(double) * item->inputs);
+										NOT_ENOUGH_MEMORY(ts.inputs);
+										ts.results = calloc(ts.number_of_sets,
+												sizeof(double) * item->outputs);
+										NOT_ENOUGH_MEMORY(ts.results);
+										ind = 0;
+									} else if (!strcmp(ptr1, "END")) {
+										ind++;
+										if (ind >= ts.number_of_sets)
+											break;
+									} else if (!strcmp(ptr1, "INP")) {
+										int nmb = atoi(ptr2);
+										char *pptr;
+										double val = strtod(ptr3, &pptr);
+										if (nmb < item->inputs) {
+											ts.inputs[(ind * item->inputs) + nmb] =
+													val;
+										}
+									} else if (!strcmp(ptr1, "EXP")) {
+										int nmb = atoi(ptr2);
+										char *pptr;
+										double val = strtod(ptr3, &pptr);
+										if (nmb < item->outputs) {
+											ts.results[(ind * item->outputs)
+													+ nmb] = val;
+										}
+									}
+								}
+							}
+						}
+					}
+					fclose(fp);
+					if (line)
+						free(line);
+					line = NULL;
+					int jnd = 0, xnd = 0;
+					for (ind = 0; ind < ts.epochs; ind++) {
+						for (jnd = 0; jnd < ts.number_of_sets; jnd++) {
+							for (xnd = 0; xnd < item->inputs; xnd++) {
+								bayrepo_fill_input(item->net, xnd,
+										ts.inputs[(jnd * item->inputs) + xnd]);
+							}
+							for (xnd = 0; xnd < item->outputs; xnd++) {
+								bayrepo_fill_train(item->net, xnd,
+										ts.results[(jnd * item->outputs) + xnd]);
+							}
+							bayrepo_train(item->net, 1, item->dropout);
+						}
+					}
+				}
+			}
+		}
+
+	} else {
+		snprintf(buf, MAX_ACT_LAYERS, "/");
+	}
+
+	if (form_container.ajax) {
+		mg_send_http_ok(conn, "text/plain", MAX_PAGE_LEN);
+
+		if (form_container.result) {
+			mg_printf(conn, "TYPE:RESULT\n");
+			if (item) {
+				for (index = 0; index < item->outputs; index++) {
+					mg_printf(conn, "%d:%f\n", index,
+							bayrepo_get_result(item->net, index));
+				}
+			}
+		} else if (form_container.training) {
+			mg_printf(conn, "TYPE:TRAINING\n");
+		}
+
+		web_clear_FileHandlerForm(&form_container);
+		pthread_rwlock_unlock(&m_globalNeuro);
+		return 1;
+	}
+
+	web_clear_FileHandlerForm(&form_container);
 	pthread_rwlock_unlock(&m_globalNeuro);
 
 	mg_send_http_redirect(conn, buf, 302);
@@ -903,10 +1243,10 @@ int main(int argc, char *argv[]) {
 	mg_set_request_handler(ctx, ADD_URI, web_AddHandler, 0);
 	mg_set_request_handler(ctx, GET_URI, web_GetHandler, 0);
 	mg_set_request_handler(ctx, DEL_URI, web_DelHandler, 0);
-	//mg_set_request_handler(ctx, ADD_INPUT_FILE, web_ImageHandler, 0);
+	mg_set_request_handler(ctx, ADD_INPUT_FILE, web_FileHandler, 0);
 	mg_set_request_handler(ctx, ADD_INPUTP, web_InputHandler, 0);
-	//mg_set_request_handler(ctx, ADD_TRAIN_FILE, web_ImageHandler, 0);
-	//mg_set_request_handler(ctx, ADD_TRAINP, web_ImageHandler, 0);
+	mg_set_request_handler(ctx, ADD_TRAIN_FILE, web_FileHandler, 0);
+	mg_set_request_handler(ctx, ADD_TRAINP, web_InputHandler, 0);
 	mg_set_request_handler(ctx, "/", web_IndexHandler, 0);
 
 	memset(ports, 0, sizeof(ports));
@@ -918,7 +1258,6 @@ int main(int argc, char *argv[]) {
 		const char *host;
 
 		if ((ports[n].protocol & 1) == 1) {
-			/* IPv4 */
 			host = "127.0.0.1";
 			printf("View neuro at %s://%s:%i/\n", proto, host, ports[n].port);
 			printf("Exit at %s://%s:%i%s\n", proto, host, ports[n].port,
@@ -928,12 +1267,10 @@ int main(int argc, char *argv[]) {
 
 	}
 
-	/* Wait until the server should be closed */
 	while (!exitNow) {
 		sleep(1);
 	}
 
-	/* Stop the server */
 	mg_stop(ctx);
 	printf("Server stopped.\n");
 	printf("Bye!\n");
