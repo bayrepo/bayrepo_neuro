@@ -213,9 +213,6 @@ static int web_IndexHandler(struct mg_connection *conn, void *cbdata) {
 }
 
 static void web_clean_AddHandlerForm(AddHandlerForm *form) {
-	if (form->netName) {
-		free(form->netName);
-	}
 }
 
 static int web_field_found_AddForm(const char *key, const char *filename,
@@ -560,6 +557,7 @@ static int web_GetHandler(struct mg_connection *conn, void *cbdata) {
 	mg_printf(conn, "  <body>\n");
 	mg_printf(conn, "    <h1>%s[<a href=\"%s/%d\">x</a>]</h1>\n", item->name,
 	DEL_URI, item->id);
+	mg_printf(conn, "    <p><a href=\"/\">Back</a></p>\n");
 	mg_printf(conn, "    <table class=\"tbl1\">\n");
 	mg_printf(conn, "      <tr>\n");
 	mg_printf(conn, "        <td>\n");
@@ -626,7 +624,7 @@ static int web_GetHandler(struct mg_connection *conn, void *cbdata) {
 	mg_printf(conn, "      </tr>\n");
 	mg_printf(conn, "      <tr>\n");
 	mg_printf(conn, "        <td>\n");
-	mg_printf(conn, "          <form action=\"%s/%d\" method=\"POST\">\n",
+	mg_printf(conn, "          <form action=\"%s/%d\" method=\"POST\" enctype=\"multipart/form-data\">\n",
 	ADD_INPUT_FILE, id);
 	mg_printf(conn,
 			"            <label for=\"file_in1\">Input parameters file</label>\n");
@@ -670,7 +668,7 @@ static int web_GetHandler(struct mg_connection *conn, void *cbdata) {
 	mg_printf(conn, "      </tr>\n");
 	mg_printf(conn, "      <tr>\n");
 	mg_printf(conn, "        <td>\n");
-	mg_printf(conn, "          <form action=\"%s/%d\" method=\"POST\">\n",
+	mg_printf(conn, "          <form action=\"%s/%d\" method=\"POST\" enctype=\"multipart/form-data\">\n",
 	ADD_TRAIN_FILE, id);
 	mg_printf(conn,
 			"            <label for=\"file_train1\">Input training parameters file</label>\n");
@@ -1044,6 +1042,7 @@ static int web_FileHandler(struct mg_connection *conn, void *cbdata) {
 	ssize_t rd;
 	size_t len = 0;
 	const struct mg_request_info *req_info = mg_get_request_info(conn);
+
 	int id = 0;
 	int index = 0;
 	char buf[MAX_ACT_LAYERS];
@@ -1113,6 +1112,8 @@ static int web_FileHandler(struct mg_connection *conn, void *cbdata) {
 								ptr2++;
 								char *ptr3 = strchr(ptr2, ':');
 								if (ptr3) {
+									*ptr3 = 0;
+									ptr3++;
 									char *ptr4 = strchr(ptr3, '\n');
 									if (ptr4)
 										*ptr4 = 0;
