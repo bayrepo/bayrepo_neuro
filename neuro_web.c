@@ -24,6 +24,7 @@
 
 #include "civetweb.h"
 #include "neuro.h"
+#include "neuro_urls.h"
 
 #define MAX_ACT_LAYERS 4096
 #define MAX_PAGE_LEN 1024*1024
@@ -154,10 +155,7 @@ static void web_delete_net(int id) {
 #define ADD_FILE_URI "/addf"
 #define DEL_URI "/del"
 
-#define ADD_INPUT_FILE "/addinf"
-#define ADD_INPUTP "/addinp"
-#define ADD_TRAIN_FILE "/addtrf"
-#define ADD_TRAINP "/addtrn"
+#define ECHO_URI "/echo"
 volatile int exitNow = 0;
 
 static int web_IndexHandler(struct mg_connection *conn, void *cbdata) {
@@ -1205,6 +1203,55 @@ static int web_FileHandler(struct mg_connection *conn, void *cbdata) {
 	return 1;
 }
 
+typedef struct __EchoHandlerForm {
+	struct mg_connection *conn;
+} EchoHandlerForm;
+
+static int web_field_found_EchoForm(const char *key, const char *filename,
+		char *path, size_t pathlen, void *user_data) {
+	return MG_FORM_FIELD_STORAGE_GET;
+}
+
+static int web_field_get_EchoForm(const char *key, const char *value,
+		size_t valuelen, void *user_data) {
+	EchoHandlerForm *form = (EchoHandlerForm *) user_data;
+	if ((key != NULL) && (key[0] == '\0')) {
+		return MG_FORM_FIELD_HANDLE_ABORT;
+	}
+	if ((valuelen > 0) && (value == NULL)) {
+		return MG_FORM_FIELD_HANDLE_ABORT;
+	}
+
+	if (key) {
+		mg_printf(form->conn, "Found fieled %s=%s valuelen %d\n", key, value, valuelen);
+	}
+	return 0;
+}
+
+static int web_field_stored_EchoForm(const char *path, long long file_size,
+		void *user_data) {
+	return 0;
+}
+
+static int web_EchoHandler(struct mg_connection *conn, void *cbdata) {
+	char * line = NULL;
+	ssize_t rd;
+	size_t len = 0;
+	const struct mg_request_info *req_info = mg_get_request_info(conn);
+
+	mg_send_http_ok(conn, "text/plain", MAX_PAGE_LEN);
+
+	EchoHandlerForm form_container;
+	memset(&form_container, 0, sizeof(EchoHandlerForm));
+	form_container.conn = conn;
+	struct mg_form_data_handler fdh = { web_field_found_EchoForm,
+			web_field_get_EchoForm, web_field_stored_EchoForm, &form_container };
+
+	int ret = mg_handle_form_request(conn, &fdh);
+	mg_printf(conn, "Found %d form fields\n", ret);
+	return 1;
+}
+
 static int web_log_message(const struct mg_connection *conn,
 		const char *message) {
 	puts(message);
@@ -1248,6 +1295,7 @@ int main(int argc, char *argv[]) {
 	mg_set_request_handler(ctx, ADD_INPUTP, web_InputHandler, 0);
 	mg_set_request_handler(ctx, ADD_TRAIN_FILE, web_FileHandler, 0);
 	mg_set_request_handler(ctx, ADD_TRAINP, web_InputHandler, 0);
+	mg_set_request_handler(ctx, ECHO_URI, web_EchoHandler, 0);
 	mg_set_request_handler(ctx, "/", web_IndexHandler, 0);
 
 	memset(ports, 0, sizeof(ports));
