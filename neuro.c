@@ -55,6 +55,7 @@ extern unsigned long int gsl_rng_default_seed;
 		ISDEBUGINFO_END()
 
 #define MAX_LAYER_NAME_LEN 1024
+#define MAX_BUFFER_LEN 4096
 
 static void bayrepo_print_matrix(gsl_matrix *a, const char *matrix_name,
 		int index_matrix) {
@@ -398,6 +399,16 @@ activation bayrepo_get_layer_func(void *blob, int lyn) {
 		neuro_skeleton *data = (neuro_skeleton *) blob;
 		if ((lyn < (data->number_of_hidden + 1))
 				&& (data->activ_l[lyn] != DEFLT)) {
+			return data->activ_l[lyn];
+		}
+	}
+	return NOACTIV;
+}
+
+activation bayrepo_get_sublayer_func(void *blob, int lyn) {
+	if (blob) {
+		neuro_skeleton *data = (neuro_skeleton *) blob;
+		if (lyn < (data->number_of_hidden + 1)) {
 			return data->activ_l[lyn];
 		}
 	}
@@ -785,4 +796,251 @@ void bayrepo_print_matrix_custom(void *blob, bayrepo_decorator *decor) {
 				decor->table_footer(decor->user_data);
 		}
 	}
+}
+
+int input_l;
+int output_l;
+int hidden_l;
+int number_of_hidden;
+double alpha;
+gsl_matrix *input_m;
+gsl_matrix *output_m;
+gsl_matrix **hidden_m;
+gsl_matrix **dropuot;
+gsl_matrix **layers;
+gsl_matrix **layers_delta;
+gsl_matrix *temp;
+gsl_matrix *train;
+gsl_matrix *error;
+int layers_numb;
+activation activ;
+activation *activ_l;
+
+/*
+ * Save format
+ *
+ *  [int input_l]\n
+ *  [int output_l]\n
+ *  [int hidden_l]\n
+ *  [int number_of_hidden]\n
+ *  [double alpha]\n
+ *  [int activ]\n
+ *  [ACTBEG]\n
+ *  [int layer_number]:[int activ]\n
+ *  [ACTEND]\n
+ *  [HIDDEN_BEG]\n
+ *  [int X]:[int Y]:[double value]\n
+ *  [HIDDEN_END]
+ *  [OUTPUT_BEG]\n
+ *  [int X]:[int Y]:[double value]\n
+ *  [OUTPUT_END]\n
+ */
+
+static char *bayrepo_reallocate_buffer(char *buffer, char *newdata, int *len,
+		int newlen) {
+	char *new_buff = (char *) malloc(*len + newlen);
+	if (!new_buff) {
+		return NULL;
+	}
+	if (buffer) {
+		memcpy(new_buff, buffer, *len);
+	}
+	memcpy(new_buff + *len, newdata, newlen);
+	if (buffer)
+		free(buffer);
+	*len = *len + newlen;
+	return new_buff;
+}
+
+int bayrepo_save_to_buffer(void *blob, char **buffer) {
+	char buff[MAX_LAYER_NAME_LEN];
+	int index;
+	if (blob) {
+		int len = 0;
+		char *ptr = NULL;
+		neuro_skeleton *data = (neuro_skeleton *) blob;
+		snprintf(buff, MAX_LAYER_NAME_LEN, "%d\n", data->input_l);
+		ptr = bayrepo_reallocate_buffer(ptr, (char *) buff, &len, strlen(buff));
+		snprintf(buff, MAX_LAYER_NAME_LEN, "%d\n", data->output_l);
+		ptr = bayrepo_reallocate_buffer(ptr, (char *) buff, &len, strlen(buff));
+		snprintf(buff, MAX_LAYER_NAME_LEN, "%d\n", data->hidden_l);
+		ptr = bayrepo_reallocate_buffer(ptr, (char *) buff, &len, strlen(buff));
+		snprintf(buff, MAX_LAYER_NAME_LEN, "%d\n", data->number_of_hidden);
+		ptr = bayrepo_reallocate_buffer(ptr, (char *) buff, &len, strlen(buff));
+		snprintf(buff, MAX_LAYER_NAME_LEN, "%f\n", data->alpha);
+		ptr = bayrepo_reallocate_buffer(ptr, (char *) buff, &len, strlen(buff));
+		snprintf(buff, MAX_LAYER_NAME_LEN, "%d\n", (int) data->activ);
+		ptr = bayrepo_reallocate_buffer(ptr, (char *) buff, &len, strlen(buff));
+		ptr = bayrepo_reallocate_buffer(ptr, (char *) "[ACTBEG]\n", &len,
+				strlen("[ACTBEG]\n"));
+		for (index = 0; index < (data->number_of_hidden + 1); index++) {
+			snprintf(buff, MAX_LAYER_NAME_LEN, "%d:%d\n", index,
+					(int) data->activ_l[index]);
+			ptr = bayrepo_reallocate_buffer(ptr, (char *) buff, &len,
+					strlen(buff));
+		}
+		ptr = bayrepo_reallocate_buffer(ptr, (char *) "[ACTEND]\n", &len,
+				strlen("[ACTEND]\n"));
+		for (index = 0; index < data->number_of_hidden; index++) {
+			ptr = bayrepo_reallocate_buffer(ptr, (char *) "[HIDDEN_BEG]\n",
+					&len, strlen("[HIDDEN_BEG]\n"));
+			int x, y;
+			for (x = 0; x < data->hidden_m[index]->size1; x++) {
+				for (y = 0; y < data->hidden_m[index]->size2; y++) {
+					snprintf(buff, MAX_LAYER_NAME_LEN, "%d:%d:%f\n", x, y,
+							gsl_matrix_get(data->hidden_m[index], x, y));
+					ptr = bayrepo_reallocate_buffer(ptr, (char *) buff, &len,
+							strlen(buff));
+				}
+			}
+			ptr = bayrepo_reallocate_buffer(ptr, (char *) "[HIDDEN_END]\n",
+					&len, strlen("[HIDDEN_END]\n"));
+		}
+		ptr = bayrepo_reallocate_buffer(ptr, (char *) "[OUTPUT_BEG]\n", &len,
+				strlen("[OUTPUT_BEG]\n"));
+		int x, y;
+		for (x = 0; x < data->output_m->size1; x++) {
+			for (y = 0; y < data->output_m->size2; y++) {
+				snprintf(buff, MAX_LAYER_NAME_LEN, "%d:%d:%f\n", x, y,
+						gsl_matrix_get(data->output_m, x, y));
+				ptr = bayrepo_reallocate_buffer(ptr, (char *) buff, &len,
+						strlen(buff));
+			}
+		}
+		ptr = bayrepo_reallocate_buffer(ptr, (char *) "[OUTPUT_END]\n", &len,
+				strlen("[OUTPUT_END]\n"));
+		*buffer = ptr;
+		return len;
+	}
+	return 0;
+}
+
+void *bayrepo_restore_buffer(char *buffer, int buffer_len) {
+	FILE *fp = fmemopen((void*) buffer, buffer_len, "r");
+	int input_l = 0;
+	int output_l = 0;
+	int hidden_l = 0;
+	int numb_of_hidden = 0;
+	activation act = RELU;
+	int act_beg = 0;
+	double alpha = 0.0;
+	void *blob = NULL;
+	int is_hidden = 0;
+	int hidden_index = 0;
+	int is_out = 0;
+	if (fp) {
+		char result_buf[MAX_BUFFER_LEN];
+		int counter = 0;
+
+		while (!feof(fp)) {
+			if (fgets(result_buf, MAX_BUFFER_LEN, fp)) {
+				switch (counter) {
+				case 0: {
+					result_buf[strlen(result_buf) - 1] = 0;
+					input_l = atoi(result_buf);
+				}
+					break;
+				case 1: {
+					result_buf[strlen(result_buf) - 1] = 0;
+					output_l = atoi(result_buf);
+				}
+					break;
+				case 2: {
+					result_buf[strlen(result_buf) - 1] = 0;
+					hidden_l = atoi(result_buf);
+				}
+					break;
+				case 3: {
+					result_buf[strlen(result_buf) - 1] = 0;
+					numb_of_hidden = atoi(result_buf);
+				}
+					break;
+				case 4: {
+					char *tptr;
+					result_buf[strlen(result_buf) - 1] = 0;
+					alpha = strtod(result_buf, &tptr);
+				}
+					break;
+				case 5: {
+					result_buf[strlen(result_buf) - 1] = 0;
+					act = (activation) atoi(result_buf);
+					if (input_l > 0 && output_l > 0 && hidden_l >= 0
+							&& numb_of_hidden >= 0 && alpha > 0.0) {
+						blob = bayrepo_init_neuro(input_l, output_l, hidden_l,
+								numb_of_hidden, alpha, act);
+					}
+				}
+					break;
+				default: {
+					if (!blob)
+						return NULL;
+					if (strstr(result_buf, "[ACTBEG]")) {
+						act_beg = 1;
+					} else if (strstr(result_buf, "[ACTEND]")) {
+						act_beg = 0;
+					} else if (act_beg) {
+						result_buf[strlen(result_buf) - 1] = 0;
+						char *ptr = strchr(result_buf, ':');
+						if (ptr) {
+							*ptr = 0;
+							ptr++;
+							int ly = atoi(result_buf);
+							int ac = atoi(ptr);
+							bayrepo_set_layer_activ(blob, ly, (activation) ac);
+						}
+					} else if (strstr(result_buf, "[HIDDEN BEG]")) {
+						is_hidden = 1;
+					} else if (strstr(result_buf, "[HIDDEN END]")) {
+						hidden_index++;
+						is_hidden = 0;
+					} else if (is_hidden) {
+						result_buf[strlen(result_buf) - 1] = 0;
+						char *ptr1 = strchr(result_buf, ':');
+						if (ptr1) {
+							*ptr1 = 0;
+							ptr1++;
+							char *ptr2 = strchr(ptr1, ':');
+							if (ptr2) {
+								*ptr2 = 0;
+								ptr2++;
+								char *tptr = NULL;
+								int x = atoi(result_buf);
+								int y = atoi(ptr1);
+								double vl = strtod(ptr2, &tptr);
+								bayrepo_fill_hidden(blob, hidden_index, x, y,
+										vl);
+							}
+						}
+					} else if (strstr(result_buf, "[OUTPUT_BEG]")) {
+						is_out = 1;
+					} else if (strstr(result_buf, "[OUTPUT_END]")) {
+						hidden_index++;
+						is_out = 0;
+					} else if (is_hidden) {
+						result_buf[strlen(result_buf) - 1] = 0;
+						char *ptr1 = strchr(result_buf, ':');
+						if (ptr1) {
+							*ptr1 = 0;
+							ptr1++;
+							char *ptr2 = strchr(ptr1, ':');
+							if (ptr2) {
+								*ptr2 = 0;
+								ptr2++;
+								char *tptr = NULL;
+								int x = atoi(result_buf);
+								int y = atoi(ptr1);
+								double vl = strtod(ptr2, &tptr);
+								bayrepo_fill_outm(blob, x, y, vl);
+							}
+						}
+					}
+				}
+				}
+			}
+			counter++;
+		}
+		return blob;
+
+	}
+	return NULL;
 }

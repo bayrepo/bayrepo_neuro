@@ -154,6 +154,9 @@ static void web_delete_net(int id) {
 #define GET_URI "/get"
 #define ADD_FILE_URI "/addf"
 #define DEL_URI "/del"
+#define SVALL_URI "/allsave"
+
+#define NEURO_FILE "neuro_web.dat"
 
 #define ECHO_URI "/echo"
 volatile int exitNow = 0;
@@ -182,14 +185,16 @@ static int web_IndexHandler(struct mg_connection *conn, void *cbdata) {
 	mg_printf(conn, "    <table class=\"tbl1\">\n");
 	mg_printf(conn, "      <tr>\n");
 	mg_printf(conn, "        <th><a href=\"%s\">Add neuro</a></th>\n", ADD_URI);
-	mg_printf(conn, "        <th><a href=\"%s\">Add neuro from file</a></th>\n",
-	ADD_FILE_URI);
+//	mg_printf(conn, "        <th><a href=\"%s\">Add neuro from file</a></th>\n",
+//	ADD_FILE_URI);
 	mg_printf(conn, "        <th><a href=\"%s\">Exit</a></th>\n", EXIT_URI);
+	mg_printf(conn, "        <th><a href=\"%s\">Save all</a></th>\n",
+	SVALL_URI);
 	mg_printf(conn, "      </tr>\n");
 	pthread_rwlock_rdlock(&m_globalNeuro);
 	neuro_item *item = neuro_head;
 	mg_printf(conn, "      <tr>\n");
-	mg_printf(conn, "        <td colspan=\"3\">\n");
+	mg_printf(conn, "        <td colspan=\"4\">\n");
 	if (item) {
 		while (item) {
 			mg_printf(conn,
@@ -622,8 +627,9 @@ static int web_GetHandler(struct mg_connection *conn, void *cbdata) {
 	mg_printf(conn, "      </tr>\n");
 	mg_printf(conn, "      <tr>\n");
 	mg_printf(conn, "        <td>\n");
-	mg_printf(conn, "          <form action=\"%s/%d\" method=\"POST\" enctype=\"multipart/form-data\">\n",
-	ADD_INPUT_FILE, id);
+	mg_printf(conn,
+			"          <form action=\"%s/%d\" method=\"POST\" enctype=\"multipart/form-data\">\n",
+			ADD_INPUT_FILE, id);
 	mg_printf(conn,
 			"            <label for=\"file_in1\">Input parameters file</label>\n");
 	mg_printf(conn,
@@ -666,8 +672,9 @@ static int web_GetHandler(struct mg_connection *conn, void *cbdata) {
 	mg_printf(conn, "      </tr>\n");
 	mg_printf(conn, "      <tr>\n");
 	mg_printf(conn, "        <td>\n");
-	mg_printf(conn, "          <form action=\"%s/%d\" method=\"POST\" enctype=\"multipart/form-data\">\n",
-	ADD_TRAIN_FILE, id);
+	mg_printf(conn,
+			"          <form action=\"%s/%d\" method=\"POST\" enctype=\"multipart/form-data\">\n",
+			ADD_TRAIN_FILE, id);
 	mg_printf(conn,
 			"            <label for=\"file_train1\">Input training parameters file</label>\n");
 	mg_printf(conn,
@@ -1223,7 +1230,8 @@ static int web_field_get_EchoForm(const char *key, const char *value,
 	}
 
 	if (key) {
-		mg_printf(form->conn, "Found fieled %s=%s valuelen %d\n", key, value, valuelen);
+		mg_printf(form->conn, "Found fieled %s=%s valuelen %d\n", key, value,
+				valuelen);
 	}
 	return 0;
 }
@@ -1258,6 +1266,166 @@ static int web_log_message(const struct mg_connection *conn,
 	return 1;
 }
 
+/*
+ * File format:
+ * [DATA_BEG]
+ * [int id]\n
+ * [char name]\n;
+ * [int inputs]\n
+ * [int outputs]\n
+ * [int hiddens]\n
+ * [int hid_nets]\n
+ * [int dropout]\n
+ * [double learn_speed]\n
+ * [int act]\n
+ * [FORMAT][size]\n
+ * [neuro format]
+ * [DATA_END]
+ */
+
+static int web_SaveAllHandler(struct mg_connection *conn, void *cbdata) {
+	char * line = NULL;
+	ssize_t rd;
+	size_t len = 0;
+	const struct mg_request_info *req_info = mg_get_request_info(conn);
+	pthread_rwlock_wrlock(&m_globalNeuro);
+	neuro_item *item = neuro_head;
+
+	if (item) {
+		FILE *fp = fopen(NEURO_FILE, "w");
+		if (fp) {
+			while (item) {
+				char *net_buffer = NULL;
+				int len = bayrepo_save_to_buffer(item->net, &net_buffer);
+				if (len > 0 && net_buffer) {
+					fputs("[DATA_BEG]\n", fp);
+					fprintf(fp, "%d\n", item->id);
+					fprintf(fp, "%s\n", item->name);
+					fprintf(fp, "%d\n", item->inputs);
+					fprintf(fp, "%d\n", item->outputs);
+					fprintf(fp, "%d\n", item->hiddens);
+					fprintf(fp, "%d\n", item->hid_nets);
+					fprintf(fp, "%d\n", item->dropout);
+					fprintf(fp, "%f\n", item->learn_speed);
+					fprintf(fp, "%d\n", (int) item->act);
+					fprintf(fp, "[FORMAT]%d\n", len);
+					fwrite(net_buffer, len, 1, fp);
+					fputs("[DATA_END]\n", fp);
+				}
+				item = item->next;
+			}
+			fclose(fp);
+		}
+	}
+	pthread_rwlock_unlock(&m_globalNeuro);
+	mg_send_http_redirect(conn, "/", 302);
+	return 1;
+}
+
+static void web_restore_nets_from_file() {
+	char result_buf[MAX_ACT_LAYERS];
+	FILE *fp = fopen(NEURO_FILE, "r");
+	pthread_rwlock_wrlock(&m_globalNeuro);
+	neuro_item *item = NULL;
+	int is_data = 0;
+	int cntr = 0;
+	int index;
+	if (fp) {
+		while (!feof(fp)) {
+			if (fgets(result_buf, MAX_ACT_LAYERS, fp)) {
+				if (strstr(result_buf, "[DATA_BEG]")) {
+					is_data = 1;
+					item = calloc(1, sizeof(neuro_item));
+					NOT_ENOUGH_MEMORY(item);
+					if (neuro_head) {
+						neuro_tail->next = item;
+						item->prev = neuro_tail;
+						neuro_tail = item;
+					} else {
+						neuro_head = item;
+						neuro_tail = item;
+					}
+				} else if (strstr(result_buf, "[DATA_END]")) {
+					is_data = 0;
+					cntr = 0;
+					for (index = 0; index < (item->hiddens + 1); index++) {
+						item->flist[index] = bayrepo_get_sublayer_func(
+								item->net, index);
+					}
+				} else if (is_data) {
+					switch (cntr) {
+					case 0: {
+						result_buf[strlen(result_buf) - 1] = 0;
+						item->id = atoi(result_buf);
+						if (globalIdCounter < item->id) {
+							globalIdCounter = item->id;
+						}
+						break;
+					}
+					case 1: {
+						result_buf[strlen(result_buf) - 1] = 0;
+						item->name = strdup(result_buf);
+						NOT_ENOUGH_MEMORY(item->name);
+						break;
+					}
+					case 2: {
+						result_buf[strlen(result_buf) - 1] = 0;
+						item->inputs = atoi(result_buf);
+						break;
+					}
+					case 3: {
+						result_buf[strlen(result_buf) - 1] = 0;
+						item->outputs = atoi(result_buf);
+						break;
+					}
+					case 4: {
+						result_buf[strlen(result_buf) - 1] = 0;
+						item->hiddens = atoi(result_buf);
+						break;
+					}
+					case 5: {
+						result_buf[strlen(result_buf) - 1] = 0;
+						item->hid_nets = atoi(result_buf);
+						break;
+					}
+					case 6: {
+						result_buf[strlen(result_buf) - 1] = 0;
+						item->dropout = atoi(result_buf);
+						break;
+					}
+					case 7: {
+						char *tptr;
+						result_buf[strlen(result_buf) - 1] = 0;
+						item->learn_speed = strtod(result_buf, &tptr);
+						break;
+					}
+					case 8: {
+						result_buf[strlen(result_buf) - 1] = 0;
+						item->act = (activation) atoi(result_buf);
+						is_data = 0;
+						break;
+					}
+					}
+					cntr++;
+				} else if (strstr(result_buf, "[FORMAT]")) {
+					result_buf[strlen(result_buf) - 1] = 0;
+					char *ptr = result_buf;
+					ptr += strlen("[FORMAT]");
+					int sz = atoi(ptr);
+					char *tmp_buffer = malloc(sz * sizeof(char));
+					NOT_ENOUGH_MEMORY(tmp_buffer);
+					fread(tmp_buffer, sz, 1, fp);
+					item->net = bayrepo_restore_buffer(tmp_buffer, sz);
+					NOT_ENOUGH_MEMORY(item->net);
+				}
+			}
+		}
+		fclose(fp);
+	}
+	globalIdCounter++;
+	pthread_rwlock_unlock(&m_globalNeuro);
+}
+
 int main(int argc, char *argv[]) {
 	const char *options[] = {
 #if !defined(NO_FILES)
@@ -1272,6 +1440,8 @@ int main(int argc, char *argv[]) {
 	struct mg_server_port ports[32];
 	int port_cnt, n;
 	int err = 0;
+
+	web_restore_nets_from_file();
 
 	if (err) {
 		fprintf(stderr, "Cannot start neuroweb - inconsistent build.\n");
@@ -1296,6 +1466,7 @@ int main(int argc, char *argv[]) {
 	mg_set_request_handler(ctx, ADD_TRAIN_FILE, web_FileHandler, 0);
 	mg_set_request_handler(ctx, ADD_TRAINP, web_InputHandler, 0);
 	mg_set_request_handler(ctx, ECHO_URI, web_EchoHandler, 0);
+	mg_set_request_handler(ctx, SVALL_URI, web_SaveAllHandler, 0);
 	mg_set_request_handler(ctx, "/", web_IndexHandler, 0);
 
 	memset(ports, 0, sizeof(ports));

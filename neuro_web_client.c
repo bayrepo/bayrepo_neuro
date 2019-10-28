@@ -11,6 +11,7 @@
 #include <curl/curl.h>
 #include <string.h>
 #include "neuro_urls.h"
+#include "neuro_web_client.h"
 
 #define MAX_ADDR_LEN 4096
 #define MAX_FIELD_NAME 256
@@ -256,7 +257,6 @@ int web_send_train_to_net(int net_id, double *inputs, int len_inputs,
 	return -1;
 }
 
-#idef 0
 int main() {
 	double inputs[2];
 	double outputs[1];
@@ -275,4 +275,3 @@ int main() {
 	web_client_clean();
 	return 0;
 }
-#endif

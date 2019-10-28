@@ -43,6 +43,9 @@ void bayrepo_fill_outm(void *blob, int position_x, int position_y,
 int bayrepo_write_matrix(void *blob, FILE *fp, int width, int height, bayrepo_mem_encode *buffer);
 void bayrepo_set_layer_activ(void * blob, int layer_number, activation activ);
 activation bayrepo_get_layer_func(void *blob, int lyn);
+activation bayrepo_get_sublayer_func(void *blob, int lyn);
 void bayrepo_print_matrix_custom(void *blob, bayrepo_decorator *decor);
+void *bayrepo_restore_buffer(char *buffer, int buffer_len);
+int bayrepo_save_to_buffer(void *blob, char **buffer);
 
 #endif /* NEURO_H_ */
