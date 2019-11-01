@@ -257,6 +257,7 @@ int web_send_train_to_net(int net_id, double *inputs, int len_inputs,
 	return -1;
 }
 
+#ifdef STANDALONE
 int main() {
 	double inputs[2];
 	double outputs[1];
@@ -275,3 +276,4 @@ int main() {
 	web_client_clean();
 	return 0;
 }
+#endif
