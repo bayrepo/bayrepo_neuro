@@ -161,8 +161,17 @@ static void web_delete_net(int id) {
 #define ECHO_URI "/echo"
 volatile int exitNow = 0;
 
+static void web_sendPageHeader(struct mg_connection *conn, char *mime){
+	mg_printf(conn,
+	          "HTTP/1.1 200 OK\r\n"
+	          "Content-Type: %s\r\n"
+	          "Connection: close\r\n\r\n",
+	          mime);
+}
+
 static int web_IndexHandler(struct mg_connection *conn, void *cbdata) {
-	mg_send_http_ok(conn, "text/html", MAX_PAGE_LEN);
+	//mg_send_http_ok(conn, "text/html", MAX_PAGE_LEN);
+	web_sendPageHeader(conn, "text/html");
 
 	mg_printf(conn, "<!DOCTYPE html>\n");
 	mg_printf(conn, "<html>\n");
@@ -338,7 +347,8 @@ static int web_AddHandler(struct mg_connection *conn, void *cbdata) {
 		}
 	}
 
-	mg_send_http_ok(conn, "text/html", MAX_PAGE_LEN);
+	//mg_send_http_ok(conn, "text/html", MAX_PAGE_LEN);
+	web_sendPageHeader(conn, "text/html");
 	mg_printf(conn, "<!DOCTYPE html>\n");
 	mg_printf(conn, "<html>\n");
 	mg_printf(conn, "  <head>\n");
@@ -432,7 +442,8 @@ static int web_ExitHandler(struct mg_connection *conn, void *cbdata) {
 	}
 
 	pthread_rwlock_unlock(&m_globalNeuro);
-	mg_send_http_ok(conn, "text/plain", MAX_PAGE_LEN);
+	//mg_send_http_ok(conn, "text/plain", MAX_PAGE_LEN);
+	web_sendPageHeader(conn, "text/plain");
 	mg_printf(conn, "Server will shut down.\n");
 	mg_printf(conn, "Bye!\n");
 	exitNow = 1;
@@ -526,7 +537,8 @@ static int web_GetHandler(struct mg_connection *conn, void *cbdata) {
 		mg_send_http_error(conn, 404, "Not Found");
 		return 1;
 	}
-	mg_send_http_ok(conn, "text/html", MAX_PAGE_LEN);
+	//mg_send_http_ok(conn, "text/html", MAX_PAGE_LEN);
+	web_sendPageHeader(conn, "text/html");
 
 	mg_printf(conn, "<!DOCTYPE html>\n");
 	mg_printf(conn, "<html>\n");
@@ -940,7 +952,8 @@ static int web_InputHandler(struct mg_connection *conn, void *cbdata) {
 	}
 
 	if (form_container.ajax) {
-		mg_send_http_ok(conn, "text/plain", MAX_PAGE_LEN);
+		//mg_send_http_ok(conn, "text/plain", MAX_PAGE_LEN);
+		web_sendPageHeader(conn, "text/plain");
 
 		if (form_container.head) {
 			mg_printf(conn, "TYPE:RESULT\n");
@@ -1184,7 +1197,8 @@ static int web_FileHandler(struct mg_connection *conn, void *cbdata) {
 	}
 
 	if (form_container.ajax) {
-		mg_send_http_ok(conn, "text/plain", MAX_PAGE_LEN);
+		//mg_send_http_ok(conn, "text/plain", MAX_PAGE_LEN);
+		web_sendPageHeader(conn, "text/plain");
 
 		if (form_container.result) {
 			mg_printf(conn, "TYPE:RESULT\n");
@@ -1247,7 +1261,8 @@ static int web_EchoHandler(struct mg_connection *conn, void *cbdata) {
 	size_t len = 0;
 	const struct mg_request_info *req_info = mg_get_request_info(conn);
 
-	mg_send_http_ok(conn, "text/plain", MAX_PAGE_LEN);
+	//mg_send_http_ok(conn, "text/plain", MAX_PAGE_LEN);
+	web_sendPageHeader(conn, "text/plain");
 
 	EchoHandlerForm form_container;
 	memset(&form_container, 0, sizeof(EchoHandlerForm));

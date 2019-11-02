@@ -61,6 +61,8 @@ void web_client_clean() {
 	curl_global_cleanup();
 }
 
+char post_buffer[WEB_MAXIMUM_BUFFER_SIZE] = { 0 };
+
 int web_send_inputs_to_net(int net_id, double *inputs, int len_inputs,
 		double *outputs, int len_outputs, char *error) {
 	CURL *curl;
@@ -69,8 +71,6 @@ int web_send_inputs_to_net(int net_id, double *inputs, int len_inputs,
 	char name[MAX_ADDR_LEN];
 	char value[MAX_ADDR_LEN];
 	int index;
-	struct curl_httppost *formpost = NULL;
-	struct curl_httppost *lastptr = NULL;
 	struct curl_slist *headerlist = NULL;
 	static const char buf[] = "";
 	for (index = 0; index < len_outputs; index++) {
@@ -78,24 +78,28 @@ int web_send_inputs_to_net(int net_id, double *inputs, int len_inputs,
 	}
 	curl = curl_easy_init();
 	if (curl) {
+		strcpy(post_buffer, "");
 		for (index = 0; index < len_inputs; index++) {
 			snprintf(name, MAX_FIELD_NAME, "fin2_%d", index);
 			snprintf(value, MAX_FIELD_NAME, "%f", inputs[index]);
-			curl_formadd(&formpost, &lastptr, CURLFORM_COPYNAME, name,
-					CURLFORM_COPYCONTENTS, value, CURLFORM_END);
+			if (post_buffer[0])
+				strncat(post_buffer, "&", WEB_MAXIMUM_BUFFER_SIZE);
+			strncat(post_buffer, name, WEB_MAXIMUM_BUFFER_SIZE);
+			strncat(post_buffer, "=", WEB_MAXIMUM_BUFFER_SIZE);
+			strncat(post_buffer, value, WEB_MAXIMUM_BUFFER_SIZE);
 		}
-		curl_formadd(&formpost, &lastptr, CURLFORM_COPYNAME, "ajax",
-				CURLFORM_COPYCONTENTS, "y", CURLFORM_END);
-		curl_formadd(&formpost, &lastptr, CURLFORM_COPYNAME, "submit",
-				CURLFORM_COPYCONTENTS, "Send", CURLFORM_END);
+		if (post_buffer[0])
+			strncat(post_buffer, "&", WEB_MAXIMUM_BUFFER_SIZE);
+		strncat(post_buffer, "ajax=y", WEB_MAXIMUM_BUFFER_SIZE);
+
 		headerlist = curl_slist_append(headerlist, buf);
 		headerlist = curl_slist_append(headerlist, "cache-control: no-cache");
 
 		snprintf(uri, MAX_ADDR_LEN, "%s%s/%d", web_addr, ADD_INPUTP, net_id);
 		curl_easy_setopt(curl, CURLOPT_URL, uri);
 		curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headerlist);
-		curl_easy_setopt(curl, CURLOPT_HTTPPOST, formpost);
 		curl_easy_setopt(curl, CURLOPT_CUSTOMREQUEST, "POST");
+		curl_easy_setopt(curl, CURLOPT_POSTFIELDS, post_buffer);
 
 		struct web_buffer buffer;
 		buffer.memory = malloc(WEB_INITIAL_BUFFER_SIZE);
@@ -103,7 +107,6 @@ int web_send_inputs_to_net(int net_id, double *inputs, int len_inputs,
 		buffer.used = 0;
 		if (!buffer.memory) {
 			curl_easy_cleanup(curl);
-			curl_formfree(formpost);
 			curl_slist_free_all(headerlist);
 			strcpy(error, "curl: not enough memory");
 			return -1;
@@ -119,7 +122,6 @@ int web_send_inputs_to_net(int net_id, double *inputs, int len_inputs,
 			ret_code = -1;
 		}
 		curl_easy_cleanup(curl);
-		curl_formfree(formpost);
 		curl_slist_free_all(headerlist);
 
 		if (ret_code == 0) {
@@ -171,36 +173,40 @@ int web_send_train_to_net(int net_id, double *inputs, int len_inputs,
 	char name[MAX_ADDR_LEN];
 	char value[MAX_ADDR_LEN];
 	int index;
-	struct curl_httppost *formpost = NULL;
-	struct curl_httppost *lastptr = NULL;
 	struct curl_slist *headerlist = NULL;
 	static const char buf[] = "";
 	curl = curl_easy_init();
 	if (curl) {
+		strcpy(post_buffer, "");
 		for (index = 0; index < len_inputs; index++) {
 			snprintf(name, MAX_FIELD_NAME, "tin2_%d", index);
 			snprintf(value, MAX_FIELD_NAME, "%f", inputs[index]);
-			curl_formadd(&formpost, &lastptr, CURLFORM_COPYNAME, name,
-					CURLFORM_COPYCONTENTS, value, CURLFORM_END);
+			if (post_buffer[0])
+				strncat(post_buffer, "&", WEB_MAXIMUM_BUFFER_SIZE);
+			strncat(post_buffer, name, WEB_MAXIMUM_BUFFER_SIZE);
+			strncat(post_buffer, "=", WEB_MAXIMUM_BUFFER_SIZE);
+			strncat(post_buffer, value, WEB_MAXIMUM_BUFFER_SIZE);
 		}
 		for (index = 0; index < len_outputs; index++) {
 			snprintf(name, MAX_FIELD_NAME, "tine2_%d", index);
 			snprintf(value, MAX_FIELD_NAME, "%f", outputs[index]);
-			curl_formadd(&formpost, &lastptr, CURLFORM_COPYNAME, name,
-					CURLFORM_COPYCONTENTS, value, CURLFORM_END);
+			if (post_buffer[0])
+							strncat(post_buffer, "&", WEB_MAXIMUM_BUFFER_SIZE);
+						strncat(post_buffer, name, WEB_MAXIMUM_BUFFER_SIZE);
+						strncat(post_buffer, "=", WEB_MAXIMUM_BUFFER_SIZE);
+						strncat(post_buffer, value, WEB_MAXIMUM_BUFFER_SIZE);
 		}
-		curl_formadd(&formpost, &lastptr, CURLFORM_COPYNAME, "ajax",
-				CURLFORM_COPYCONTENTS, "y", CURLFORM_END);
-		curl_formadd(&formpost, &lastptr, CURLFORM_COPYNAME, "submit",
-				CURLFORM_COPYCONTENTS, "Send", CURLFORM_END);
+		if (post_buffer[0])
+					strncat(post_buffer, "&", WEB_MAXIMUM_BUFFER_SIZE);
+				strncat(post_buffer, "ajax=y", WEB_MAXIMUM_BUFFER_SIZE);
 		headerlist = curl_slist_append(headerlist, buf);
 		headerlist = curl_slist_append(headerlist, "cache-control: no-cache");
 
 		snprintf(uri, MAX_ADDR_LEN, "%s%s/%d", web_addr, ADD_TRAINP, net_id);
 		curl_easy_setopt(curl, CURLOPT_URL, uri);
 		curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headerlist);
-		curl_easy_setopt(curl, CURLOPT_HTTPPOST, formpost);
 		curl_easy_setopt(curl, CURLOPT_CUSTOMREQUEST, "POST");
+		curl_easy_setopt(curl, CURLOPT_POSTFIELDS, post_buffer);
 
 		struct web_buffer buffer;
 		buffer.memory = malloc(WEB_INITIAL_BUFFER_SIZE);
@@ -208,7 +214,6 @@ int web_send_train_to_net(int net_id, double *inputs, int len_inputs,
 		buffer.used = 0;
 		if (!buffer.memory) {
 			curl_easy_cleanup(curl);
-			curl_formfree(formpost);
 			curl_slist_free_all(headerlist);
 			strcpy(error, "curl: not enough memory");
 			return -1;
@@ -224,7 +229,6 @@ int web_send_train_to_net(int net_id, double *inputs, int len_inputs,
 			ret_code = -1;
 		}
 		curl_easy_cleanup(curl);
-		curl_formfree(formpost);
 		curl_slist_free_all(headerlist);
 
 		if (ret_code == 0) {
