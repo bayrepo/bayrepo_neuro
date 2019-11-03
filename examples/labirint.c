@@ -340,186 +340,259 @@ int main(int argc, char* argv[]) {
 		printf("enter size more than 9\n");
 		exit(255);
 	}
+	int train = 0;
+	int is_train = 0;
+	int self = 0;
+	if (argc > 2) {
+		train = atoi(argv[2]);
+		if (train < 0) {
+			train = 0;
+			self = 1;
+		} else {
+			is_train = 1;
+		}
+	}
+
 	char *arena = calloc(1, size * size);
 	NOT_ENOUGH_OF_MEMORY(arena);
 	char *way = calloc(1, size * size);
 	NOT_ENOUGH_OF_MEMORY(way);
-	int startX = rand() % size;
-	int startY = rand() % size;
-
-	int endX = rand() % size;
-	int endY = rand() % size;
-
-	while (startX == endX && startY == endY) {
-		endX = rand() % size;
-		endY = rand() % size;
-	}
-
-	arena[startY * size + startX] = HERO;
-	arena[endY * size + endX] = FINISH;
-
-	makeWalls(size, arena);
-
-	//printArena(size, arena);
-	//restoreArena(arena);
-	//findSymbol(arena, HERO, &startX, &startY);
-	//findSymbol(arena, FINISH, &endX, &endY);
-
-	int newX, newY;
 
 	web_client_init("http://127.0.0.1:10111");
 
-	initscr();
-	curs_set(0);
-	noecho();
-
-	int step = 0;
-	draw_screen(size, arena);
-	refresh();
-	char *tmp = NULL;
-	if (!foundWay(size, arena, startX, startY, endX, endY, way, 0, -1, &tmp)) {
-		mvprintw(size + 2, 0, "No way");
-		getch();
-		exit(255);
+	if (!is_train) {
+		initscr();
+		curs_set(0);
+		noecho();
 	}
-	free(tmp);
+	int trs = train / 20;
+	if (!trs)
+		trs = 1;
 
 	while (1) {
-		draw_screen(size, arena);
 
-		newX = startX;
-		newY = startY;
-
-		inputs[0] = is_new_pos_blocked(startX + 1, startY, size, arena); //right
-		inputs[1] = is_new_pos_blocked(startX - 1, startY, size, arena); //left
-		inputs[2] = is_new_pos_blocked(startX, startY - 1, size, arena); //up
-		inputs[3] = is_new_pos_blocked(startX, startY + 1, size, arena); //down
-
-		inputs[4] = was_here(startX + 1, startY, size, arena); //right
-		inputs[5] = was_here(startX - 1, startY, size, arena); //left
-		inputs[6] = was_here(startX, startY - 1, size, arena); //up
-		inputs[7] = was_here(startX, startY + 1, size, arena); //down
-
-		smallest_ways(startX, startY, endX, endY, &inputs[9], &inputs[8],
-				&inputs[10], &inputs[11], size);
-
-		//web_send_inputs_to_net(NET, (double *) &inputs, 12, (double *) &outputs,
-		//		4, curl_error);
-		int direct = direction_result((double *) outputs, 4);
-		switch (direct) {
-		case 0:
-			newX++;
-			break;
-		case 1:
-			newX--;
-			break;
-		case 2:
-			newY--;
-			break;
-		case 3:
-			newY++;
-			break;
-		default:
-			break;
+		if (is_train && (train % trs == 0)) {
+			printf("Trys %d\n", train);
 		}
-		mvprintw(newY + 1, newX + 1, "@");
+		memset(arena, 0, size * size);
+		memset(way, 0, size * size);
 
-		mvprintw(size + 2, 0, "Correct?(y/a/w/d/s/g/q):");
-		mvprintw(size + 3, 0, "BR%fBL%fBU%fBD%f", inputs[0], inputs[1],
-				inputs[2], inputs[3]);
-		mvprintw(size + 4, 0, "WR%fWL%fWU%fWD%f", inputs[4], inputs[5],
-				inputs[6], inputs[7]);
-		mvprintw(size + 5, 0, "DR%fDL%fDU%fDD%f", inputs[8], inputs[9],
-				inputs[10], inputs[11]);
-		refresh();
-		//int ch = getch();
-		int ch = 'g';
-		if (!way[step])
-			ch = 'q';
-		else {
-			ch = way[step++];
-		}
-		sleep(1);
+		int startX = rand() % size;
+		int startY = rand() % size;
 
-		if ((startX == endX) && (startY == endY))
-			ch = 'q';
-		//getch();
+		int endX = rand() % size;
+		int endY = rand() % size;
 
-		if (ch == 'q')
-			break;
-		if (ch == 'y') {
-			//web_send_train_to_net(NET, (double *) &inputs, 12,
-			//		(double *) &outputs, 4, curl_error);
-			arena[startY * size + startX] = WASHERE;
-			arena[newY * size + newX] = HERO;
-			startX = newX;
-			startY = newY;
+		while (startX == endX && startY == endY) {
+			endX = rand() % size;
+			endY = rand() % size;
 		}
-		if (ch == 'g') {
-			arena[startY * size + startX] = WASHERE;
-			arena[newY * size + newX] = HERO;
-			startX = newX;
-			startY = newY;
+
+		arena[startY * size + startX] = HERO;
+		arena[endY * size + endX] = FINISH;
+
+		makeWalls(size, arena);
+
+		//printArena(size, arena);
+		//restoreArena(arena);
+		//findSymbol(arena, HERO, &startX, &startY);
+		//findSymbol(arena, FINISH, &endX, &endY);
+
+		int newX, newY;
+
+		int step = 0;
+		if (!is_train) {
+			draw_screen(size, arena);
+			refresh();
 		}
-		if (ch == 'a') {
-			outputs[0] = 0.0;
-			outputs[1] = 1.0;
-			outputs[2] = 0.0;
-			outputs[3] = 0.0;
-			newX = startX - 1;
-			newY = startY;
-			//web_send_train_to_net(NET, (double *) &inputs, 12,
-			//		(double *) &outputs, 4, curl_error);
-			arena[startY * size + startX] = WASHERE;
-			arena[newY * size + newX] = HERO;
-			startX = newX;
-			startY = newY;
+		if (!self) {
+			char *tmp = NULL;
+			if (!foundWay(size, arena, startX, startY, endX, endY, way, 0, -1,
+					&tmp)) {
+				if (!is_train) {
+					mvprintw(size + 2, 0, "No way");
+					getch();
+					exit(255);
+				} else {
+					goto end_cyc;
+				}
+			}
+			free(tmp);
 		}
-		if (ch == 'w') {
-			outputs[0] = 0.0;
-			outputs[1] = 0.0;
-			outputs[2] = 1.0;
-			outputs[3] = 0.0;
+
+		while (1) {
+			if (!is_train) {
+				draw_screen(size, arena);
+			}
+
 			newX = startX;
-			newY = startY - 1;
-			//web_send_train_to_net(NET, (double *) &inputs, 12,
-			//		(double *) &outputs, 4, curl_error);
-			arena[startY * size + startX] = WASHERE;
-			arena[newY * size + newX] = HERO;
-			startX = newX;
-			startY = newY;
-		}
-		if (ch == 'd') {
-			outputs[0] = 1.0;
-			outputs[1] = 0.0;
-			outputs[2] = 0.0;
-			outputs[3] = 0.0;
-			newX = startX + 1;
 			newY = startY;
-			//web_send_train_to_net(NET, (double *) &inputs, 12,
-			//		(double *) &outputs, 4, curl_error);
-			arena[startY * size + startX] = WASHERE;
-			arena[newY * size + newX] = HERO;
-			startX = newX;
-			startY = newY;
+
+			inputs[0] = is_new_pos_blocked(startX + 1, startY, size, arena); //right
+			inputs[1] = is_new_pos_blocked(startX - 1, startY, size, arena); //left
+			inputs[2] = is_new_pos_blocked(startX, startY - 1, size, arena); //up
+			inputs[3] = is_new_pos_blocked(startX, startY + 1, size, arena); //down
+
+			inputs[4] = was_here(startX + 1, startY, size, arena); //right
+			inputs[5] = was_here(startX - 1, startY, size, arena); //left
+			inputs[6] = was_here(startX, startY - 1, size, arena); //up
+			inputs[7] = was_here(startX, startY + 1, size, arena); //down
+
+			smallest_ways(startX, startY, endX, endY, &inputs[9], &inputs[8],
+					&inputs[10], &inputs[11], size);
+
+			web_send_inputs_to_net(NET, (double *) &inputs, 12,
+					(double *) &outputs, 4, curl_error);
+			int direct = direction_result((double *) outputs, 4);
+			switch (direct) {
+			case 0:
+				newX++;
+				break;
+			case 1:
+				newX--;
+				break;
+			case 2:
+				newY--;
+				break;
+			case 3:
+				newY++;
+				break;
+			default:
+				break;
+			}
+			if (!is_train) {
+				mvprintw(newY + 1, newX + 1, "@");
+
+				mvprintw(size + 2, 0, "Correct?(y/a/w/d/s/g/q):");
+				mvprintw(size + 3, 0, "BR%fBL%fBU%fBD%f", inputs[0], inputs[1],
+						inputs[2], inputs[3]);
+				mvprintw(size + 4, 0, "WR%fWL%fWU%fWD%f", inputs[4], inputs[5],
+						inputs[6], inputs[7]);
+				mvprintw(size + 5, 0, "DR%fDL%fDU%fDD%f", inputs[8], inputs[9],
+						inputs[10], inputs[11]);
+				refresh();
+			}
+			//int ch = getch();
+			int ch = 'g';
+			if (!self) {
+				if (!way[step])
+					ch = 'q';
+				else {
+					ch = way[step++];
+				}
+			} else {
+				switch (direct) {
+				case 0:
+					ch = 'd';
+					break;
+				case 1:
+					ch = 'a';
+					break;
+				case 2:
+					ch = 'w';
+					break;
+				case 3:
+					ch = 's';
+					break;
+				default:
+					break;
+				}
+				if (arena[newY * size + newX] == BLOCK || newY < 0
+						|| newY >= size || newX < 0 || newX >= size) {
+					mvprintw(size + 9, 0, "Oops we hit the wall");
+					ch = 'q';
+					getch();
+				}
+			}
+			if (!is_train) {
+				sleep(1);
+			}
+
+			if ((startX == endX) && (startY == endY))
+				ch = 'q';
+			//getch();
+
+			if (ch == 'q')
+				break;
+			if (ch == 'y') {
+				web_send_train_to_net(NET, (double *) &inputs, 12,
+						(double *) &outputs, 4, curl_error);
+				arena[startY * size + startX] = WASHERE;
+				arena[newY * size + newX] = HERO;
+				startX = newX;
+				startY = newY;
+			}
+			if (ch == 'g') {
+				arena[startY * size + startX] = WASHERE;
+				arena[newY * size + newX] = HERO;
+				startX = newX;
+				startY = newY;
+			}
+			if (ch == 'a') {
+				outputs[0] = 0.0;
+				outputs[1] = 1.0;
+				outputs[2] = 0.0;
+				outputs[3] = 0.0;
+				newX = startX - 1;
+				newY = startY;
+				web_send_train_to_net(NET, (double *) &inputs, 12,
+						(double *) &outputs, 4, curl_error);
+				arena[startY * size + startX] = WASHERE;
+				arena[newY * size + newX] = HERO;
+				startX = newX;
+				startY = newY;
+			}
+			if (ch == 'w') {
+				outputs[0] = 0.0;
+				outputs[1] = 0.0;
+				outputs[2] = 1.0;
+				outputs[3] = 0.0;
+				newX = startX;
+				newY = startY - 1;
+				web_send_train_to_net(NET, (double *) &inputs, 12,
+						(double *) &outputs, 4, curl_error);
+				arena[startY * size + startX] = WASHERE;
+				arena[newY * size + newX] = HERO;
+				startX = newX;
+				startY = newY;
+			}
+			if (ch == 'd') {
+				outputs[0] = 1.0;
+				outputs[1] = 0.0;
+				outputs[2] = 0.0;
+				outputs[3] = 0.0;
+				newX = startX + 1;
+				newY = startY;
+				web_send_train_to_net(NET, (double *) &inputs, 12,
+						(double *) &outputs, 4, curl_error);
+				arena[startY * size + startX] = WASHERE;
+				arena[newY * size + newX] = HERO;
+				startX = newX;
+				startY = newY;
+			}
+			if (ch == 's') {
+				outputs[0] = 0.0;
+				outputs[1] = 0.0;
+				outputs[2] = 0.0;
+				outputs[3] = 1.0;
+				newX = startX;
+				newY = startY + 1;
+				web_send_train_to_net(NET, (double *) &inputs, 12,
+						(double *) &outputs, 4, curl_error);
+				arena[startY * size + startX] = WASHERE;
+				arena[newY * size + newX] = HERO;
+				startX = newX;
+				startY = newY;
+			}
 		}
-		if (ch == 's') {
-			outputs[0] = 0.0;
-			outputs[1] = 0.0;
-			outputs[2] = 0.0;
-			outputs[3] = 1.0;
-			newX = startX;
-			newY = startY + 1;
-			//web_send_train_to_net(NET, (double *) &inputs, 12,
-			//		(double *) &outputs, 4, curl_error);
-			arena[startY * size + startX] = WASHERE;
-			arena[newY * size + newX] = HERO;
-			startX = newX;
-			startY = newY;
-		}
+		end_cyc: if (!train)
+			break;
+		else
+			train--;
 	}
-
-	endwin();
+	if (!is_train) {
+		endwin();
+	}
 	web_client_clean();
 	free(arena);
 	free(way);
