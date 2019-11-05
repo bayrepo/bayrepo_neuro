@@ -15,6 +15,7 @@
 #include "neuro_web_client.h"
 
 #define MAX_TRYS_DEF 1000
+#define NET 13
 
 int main(int argc, char *argv[]) {
 	double inputs[4];
@@ -66,7 +67,7 @@ int main(int argc, char *argv[]) {
 				printf("[%d]=%f ", jndex, outputs[jndex]);
 			}
 			printf("\n");
-			web_send_inputs_to_net(7, (double *) &inputs, 4,
+			web_send_inputs_to_net(NET, (double *) &inputs, 4,
 					(double *) &outputs, 4, curl_error);
 			printf("Got: ");
 			for (jndex = 0; jndex < 4; jndex++) {
@@ -74,7 +75,7 @@ int main(int argc, char *argv[]) {
 			}
 			printf("\n");
 		} else if (is_check == 2) {
-			web_send_inputs_to_net(7, (double *) &inputs, 4,
+			web_send_inputs_to_net(NET, (double *) &inputs, 4,
 					(double *) &outputs, 4, curl_error);
 			int new_pos = 0;
 			max = -2;
@@ -91,7 +92,7 @@ int main(int argc, char *argv[]) {
 				printf("Check inputs %d\n", index);
 
 		} else {
-			web_send_train_to_net(7, (double *) &inputs, 4, (double *) &outputs,
+			web_send_train_to_net(NET, (double *) &inputs, 4, (double *) &outputs,
 					4, curl_error);
 			if (index % (MAX_TRYS / 20) == 0)
 				printf("Train inputs %d\n", index);
