@@ -15,3 +15,4 @@ add_executable(bayrepo_neuro_farm ${SOURCE_EXE})
 add_library(bayrepo_nfl STATIC ${SOURCE_LIB})
 
 target_link_libraries(bayrepo_neuro_farm pthread gsl m png crypto ${CMAKE_SOURCE_DIR}/civetweb/libcivetweb.a)
+target_link_libraries(bayrepo_nfl curl)
