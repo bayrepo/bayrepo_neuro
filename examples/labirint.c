@@ -25,6 +25,8 @@
 #define BLOCK 3
 #define WASHERE 4
 
+#define NET 16
+
 void draw_screen(int size, char *arena) {
 	int x, y;
 	for (y = 0; y < (size + 2); y++) {
@@ -123,7 +125,58 @@ void smallest_ways(int x_cur, int y_cur, int finish_x, int finish_y,
 	}
 }
 
-#define NET 5
+void smallest_ways2(int x_cur, int y_cur, int finish_x, int finish_y,
+		double *left, double *right, double *up, double *down, int size) {
+	int direct[4] = { 0, 0, 0, 0 };
+
+	*left = 0.0;
+	*right = 0.0;
+	*up = 0.0;
+	*down = 0.0;
+
+	int dxl = x_cur - 1 - finish_x;
+	int dxr = x_cur + 1 - finish_x;
+	int dyu = y_cur - 1 - finish_y;
+	int dyd = y_cur + 1 - finish_y;
+	mvprintw(size + 6, 0, "DXL%d DXR%d DYU%d DYD%d", dxl, dxr, dyu, dyd);
+
+	int dx_o = x_cur - finish_x;
+	int dy_o = y_cur - finish_y;
+	mvprintw(size + 7, 0, "DXO%d DYO%d", dx_o, dy_o);
+
+	direct[0] = dxl * dxl + dy_o * dy_o; //left
+	direct[1] = dxr * dxr + dy_o * dy_o; //right
+	direct[2] = dx_o * dx_o + dyu * dyu; //up
+	direct[3] = dx_o * dx_o + dyd * dyd; //down;
+
+	mvprintw(size + 8, 0, "SL%d SR%d SU%d SD%d", direct[0], direct[1],
+			direct[2], direct[3]);
+
+	int max = direct[0];
+	int index = 0;
+	for (index = 1; index < 4; index++) {
+		if (direct[index] > max)
+			max = direct[index];
+	}
+	for (index = 0; index < 4; index++) {
+		switch (index) {
+		case 0:
+			*left = 1.0 - (double) direct[index] / (double) max;
+			break;
+		case 1:
+			*right = 1.0 - (double) direct[index] / (double) max;
+			break;
+		case 2:
+			*up = 1.0 - (double) direct[index] / (double) max;
+			break;
+		case 3:
+			*down = 1.0 - (double) direct[index] / (double) max;
+			break;
+		default:
+			break;
+		}
+	}
+}
 
 int direction_result(double *data, int size) {
 	int index = 0;
@@ -141,7 +194,7 @@ int direction_result(double *data, int size) {
 }
 
 void makeWalls(int size, char *arena) {
-	int numberOfWalls = rand() % 20 + 5;
+	int numberOfWalls = rand() % 30 + 10;
 	int index;
 	while (numberOfWalls) {
 		int wSize = rand() % 5 + 2;
@@ -438,7 +491,7 @@ int main(int argc, char* argv[]) {
 			inputs[6] = was_here(startX, startY - 1, size, arena); //up
 			inputs[7] = was_here(startX, startY + 1, size, arena); //down
 
-			smallest_ways(startX, startY, endX, endY, &inputs[9], &inputs[8],
+			smallest_ways2(startX, startY, endX, endY, &inputs[9], &inputs[8],
 					&inputs[10], &inputs[11], size);
 
 			web_send_inputs_to_net(NET, (double *) &inputs, 12,
