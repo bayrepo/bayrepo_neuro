@@ -25,8 +25,6 @@
 #define BLOCK 3
 #define WASHERE 4
 
-#define NET 16
-
 void draw_screen(int size, char *arena) {
 	int x, y;
 	for (y = 0; y < (size + 2); y++) {
@@ -379,6 +377,7 @@ void findSymbol(char *arena, char symb, int *x, int *y) {
 }
 
 int main(int argc, char* argv[]) {
+	int NET = 1;
 	double inputs[12];
 	double outputs[4];
 	char curl_error[1024];
@@ -388,7 +387,8 @@ int main(int argc, char* argv[]) {
 		printf("enter size of labirint\n");
 		exit(255);
 	}
-	int size = atoi(argv[1]);
+	NET = atoi(argv[1]);
+	int size = atoi(argv[2]);
 	if (size < 10) {
 		printf("enter size more than 9\n");
 		exit(255);
@@ -396,8 +396,8 @@ int main(int argc, char* argv[]) {
 	int train = 0;
 	int is_train = 0;
 	int self = 0;
-	if (argc > 2) {
-		train = atoi(argv[2]);
+	if (argc > 3) {
+		train = atoi(argv[3]);
 		if (train < 0) {
 			train = 0;
 			self = 1;
