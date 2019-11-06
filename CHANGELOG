@@ -1,0 +1,7 @@
+0.1-1
+
+- Intial build:
+  - allow to start server for creating neuro nets
+  - allow to train neuro nets
+  - allow to save all neuro nets and use saved data after server restart
+  - allow to watch net item
