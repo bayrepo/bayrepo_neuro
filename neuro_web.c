@@ -602,6 +602,10 @@ static int web_GetHandler(struct mg_connection *conn, void *cbdata) {
 	mg_printf(conn, "              <td>%d</td>\n", item->hid_nets);
 	mg_printf(conn, "            </tr>\n");
 	mg_printf(conn, "            <tr>\n");
+	mg_printf(conn, "              <td>Alpha</td>\n");
+	mg_printf(conn, "              <td>%f</td>\n", item->learn_speed);
+	mg_printf(conn, "            </tr>\n");
+	mg_printf(conn, "            <tr>\n");
 	mg_printf(conn, "              <td>Activation function</td>\n");
 	mg_printf(conn, "              <td>%s</td>\n",
 			web_translate_active_to_string(item->act));

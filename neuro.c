@@ -988,9 +988,9 @@ void *bayrepo_restore_buffer(char *buffer, int buffer_len) {
 							int ac = atoi(ptr);
 							bayrepo_set_layer_activ(blob, ly, (activation) ac);
 						}
-					} else if (strstr(result_buf, "[HIDDEN BEG]")) {
+					} else if (strstr(result_buf, "[HIDDEN_BEG]")) {
 						is_hidden = 1;
-					} else if (strstr(result_buf, "[HIDDEN END]")) {
+					} else if (strstr(result_buf, "[HIDDEN_END]")) {
 						hidden_index++;
 						is_hidden = 0;
 					} else if (is_hidden) {
@@ -1016,7 +1016,7 @@ void *bayrepo_restore_buffer(char *buffer, int buffer_len) {
 					} else if (strstr(result_buf, "[OUTPUT_END]")) {
 						hidden_index++;
 						is_out = 0;
-					} else if (is_hidden) {
+					} else if (is_out) {
 						result_buf[strlen(result_buf) - 1] = 0;
 						char *ptr1 = strchr(result_buf, ':');
 						if (ptr1) {

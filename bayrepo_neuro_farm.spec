@@ -1,5 +1,5 @@
 %global p_version 0.1
-%global p_release 1
+%global p_release 2
 %define pkgname bayrepo-neuro-farm
 
 %define debug_package %{nil}
@@ -54,5 +54,8 @@ rm -rf $RPM_BUILD_ROOT
 %{_includedir}/%{pkgname}/neuro_web_client.h
 
 %changelog
+* Fri Nov 08 2019 Alexey Berezhok <bayrepo.info@gmail.com> 0.1-2
+- Fixed restore matrixes from file
+
 * Wed Nov 06 2019 Alexey Berezhok <bayrepo.info@gmail.com> 0.1-1
 - Initial build
