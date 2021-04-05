@@ -15,3 +15,6 @@ Last build
 
 cmake .
 make
+
+
+Usage example: https://putey.net/post/eksperimenty-s-neirosetyami
