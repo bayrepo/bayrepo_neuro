@@ -82,15 +82,17 @@ int web_send_inputs_to_net(int net_id, double *inputs, int len_inputs,
 		for (index = 0; index < len_inputs; index++) {
 			snprintf(name, MAX_FIELD_NAME, "fin2_%d", index);
 			snprintf(value, MAX_FIELD_NAME, "%f", inputs[index]);
-			if (post_buffer[0])
-				strncat(post_buffer, "&", WEB_MAXIMUM_BUFFER_SIZE);
-			strncat(post_buffer, name, WEB_MAXIMUM_BUFFER_SIZE);
-			strncat(post_buffer, "=", WEB_MAXIMUM_BUFFER_SIZE);
-			strncat(post_buffer, value, WEB_MAXIMUM_BUFFER_SIZE);
+			if (post_buffer[0]) {
+				strncat(post_buffer, "&", WEB_MAXIMUM_BUFFER_SIZE-1);
+			}
+			strncat(post_buffer, name, WEB_MAXIMUM_BUFFER_SIZE-1);
+			strncat(post_buffer, "=", WEB_MAXIMUM_BUFFER_SIZE-1);
+			strncat(post_buffer, value, WEB_MAXIMUM_BUFFER_SIZE-1);
 		}
 		if (post_buffer[0])
-			strncat(post_buffer, "&", WEB_MAXIMUM_BUFFER_SIZE);
-		strncat(post_buffer, "ajax=y", WEB_MAXIMUM_BUFFER_SIZE);
+			strncat(post_buffer, "&", WEB_MAXIMUM_BUFFER_SIZE-1);
+		strncat(post_buffer, "ajax=y", WEB_MAXIMUM_BUFFER_SIZE-1);
+		post_buffer[WEB_MAXIMUM_BUFFER_SIZE - 1] = 0;
 
 		headerlist = curl_slist_append(headerlist, buf);
 		headerlist = curl_slist_append(headerlist, "cache-control: no-cache");
@@ -182,23 +184,23 @@ int web_send_train_to_net(int net_id, double *inputs, int len_inputs,
 			snprintf(name, MAX_FIELD_NAME, "tin2_%d", index);
 			snprintf(value, MAX_FIELD_NAME, "%f", inputs[index]);
 			if (post_buffer[0])
-				strncat(post_buffer, "&", WEB_MAXIMUM_BUFFER_SIZE);
-			strncat(post_buffer, name, WEB_MAXIMUM_BUFFER_SIZE);
-			strncat(post_buffer, "=", WEB_MAXIMUM_BUFFER_SIZE);
-			strncat(post_buffer, value, WEB_MAXIMUM_BUFFER_SIZE);
+				strncat(post_buffer, "&", WEB_MAXIMUM_BUFFER_SIZE-1);
+			strncat(post_buffer, name, WEB_MAXIMUM_BUFFER_SIZE-1);
+			strncat(post_buffer, "=", WEB_MAXIMUM_BUFFER_SIZE-1);
+			strncat(post_buffer, value, WEB_MAXIMUM_BUFFER_SIZE-1);
 		}
 		for (index = 0; index < len_outputs; index++) {
 			snprintf(name, MAX_FIELD_NAME, "tine2_%d", index);
 			snprintf(value, MAX_FIELD_NAME, "%f", outputs[index]);
 			if (post_buffer[0])
-							strncat(post_buffer, "&", WEB_MAXIMUM_BUFFER_SIZE);
-						strncat(post_buffer, name, WEB_MAXIMUM_BUFFER_SIZE);
-						strncat(post_buffer, "=", WEB_MAXIMUM_BUFFER_SIZE);
-						strncat(post_buffer, value, WEB_MAXIMUM_BUFFER_SIZE);
+				strncat(post_buffer, "&", WEB_MAXIMUM_BUFFER_SIZE-1);
+			strncat(post_buffer, name, WEB_MAXIMUM_BUFFER_SIZE-1);
+			strncat(post_buffer, "=", WEB_MAXIMUM_BUFFER_SIZE-1);
+			strncat(post_buffer, value, WEB_MAXIMUM_BUFFER_SIZE-1);
 		}
 		if (post_buffer[0])
-					strncat(post_buffer, "&", WEB_MAXIMUM_BUFFER_SIZE);
-				strncat(post_buffer, "ajax=y", WEB_MAXIMUM_BUFFER_SIZE);
+			strncat(post_buffer, "&", WEB_MAXIMUM_BUFFER_SIZE-1);
+		strncat(post_buffer, "ajax=y", WEB_MAXIMUM_BUFFER_SIZE-1);
 		headerlist = curl_slist_append(headerlist, buf);
 		headerlist = curl_slist_append(headerlist, "cache-control: no-cache");
 
