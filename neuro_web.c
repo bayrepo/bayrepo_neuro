@@ -626,105 +626,113 @@ static int web_GetHandler(struct mg_connection *conn, void *cbdata) {
 	mg_printf(conn, "\n");
 	mg_printf(conn, "        </td>\n");
 
-	bayrepo_mem_encode pic;
-	bayrepo_write_matrix(item->net, stdout, 200, 200, &pic);
-	if (pic.size) {
-		char *pic_buf = web_base64(pic.buffer, pic.size);
-		NOT_ENOUGH_MEMORY(pic_buf);
-		mg_printf(conn,
-				"        <td><img src=\"data:image/png;base64,%s\"/></td>\n",
-				pic_buf);
-		free(pic_buf);
-		free(pic.buffer);
+	if (item->inputs < 10 && item->hid_nets < 50 && item->outputs < 20) {
+		bayrepo_mem_encode pic;
+		bayrepo_write_matrix(item->net, stdout, 200, 200, &pic);
+		if (pic.size) {
+			char *pic_buf = web_base64(pic.buffer, pic.size);
+			NOT_ENOUGH_MEMORY(pic_buf);
+			mg_printf(conn,
+					"        <td><img src=\"data:image/png;base64,%s\"/></td>\n",
+					pic_buf);
+			free(pic_buf);
+			free(pic.buffer);
+		} else {
+			mg_printf(conn, "        <td>NO PICTURE PREVIEW</td>\n");
+		}
 	} else {
 		mg_printf(conn, "        <td>NO PICTURE PREVIEW</td>\n");
 	}
 
 	mg_printf(conn, "      </tr>\n");
-	mg_printf(conn, "      <tr>\n");
-	mg_printf(conn, "        <td>\n");
-	mg_printf(conn,
-			"          <form action=\"%s/%d\" method=\"POST\" enctype=\"multipart/form-data\">\n",
-			ADD_INPUT_FILE, id);
-	mg_printf(conn,
-			"            <label for=\"file_in1\">Input parameters file</label>\n");
-	mg_printf(conn,
-			"            <input id=\"file_in1\" type=\"file\" name=\"fin1\"><br>\n");
-	mg_printf(conn, "            <input type=\"submit\" value=\"Send\">\n");
-	mg_printf(conn, "          </form>\n");
-	mg_printf(conn, "          <form action=\"%s/%d\" method=\"POST\">\n",
-	ADD_INPUTP, id);
-	for (index = 0; index < item->inputs; index++) {
+
+	if (item->inputs < 10 && item->hid_nets < 50 && item->outputs < 20) {
+
+		mg_printf(conn, "      <tr>\n");
+		mg_printf(conn, "        <td>\n");
 		mg_printf(conn,
-				"            <label for=\"file_in2_%d\">Input parameter %d</label>\n",
-				index, index);
+				"          <form action=\"%s/%d\" method=\"POST\" enctype=\"multipart/form-data\">\n",
+				ADD_INPUT_FILE, id);
 		mg_printf(conn,
-				"            <input id=\"file_in2_%d\" type=\"text\" name=\"fin2_%d\"><br>\n",
-				index, index);
-	}
-	mg_printf(conn, "            <input type=\"submit\" value=\"Send\">\n");
-	mg_printf(conn, "          </form>\n");
-	mg_printf(conn, "        </td>\n");
-	mg_printf(conn, "        <td>\n");
-	mg_printf(conn, "          <table>\n");
-	mg_printf(conn, "            <tr>\n");
-	mg_printf(conn, "              <th>Result output</th>\n");
-	mg_printf(conn, "              <th>Result value</th>\n");
-	mg_printf(conn, "            </tr>\n");
-	for (index = 0; index < item->outputs; index++) {
+				"            <label for=\"file_in1\">Input parameters file</label>\n");
+		mg_printf(conn,
+				"            <input id=\"file_in1\" type=\"file\" name=\"fin1\"><br>\n");
+		mg_printf(conn, "            <input type=\"submit\" value=\"Send\">\n");
+		mg_printf(conn, "          </form>\n");
+		mg_printf(conn, "          <form action=\"%s/%d\" method=\"POST\">\n",
+		ADD_INPUTP, id);
+		for (index = 0; index < item->inputs; index++) {
+			mg_printf(conn,
+					"            <label for=\"file_in2_%d\">Input parameter %d</label>\n",
+					index, index);
+			mg_printf(conn,
+					"            <input id=\"file_in2_%d\" type=\"text\" name=\"fin2_%d\"><br>\n",
+					index, index);
+		}
+		mg_printf(conn, "            <input type=\"submit\" value=\"Send\">\n");
+		mg_printf(conn, "          </form>\n");
+		mg_printf(conn, "        </td>\n");
+		mg_printf(conn, "        <td>\n");
+		mg_printf(conn, "          <table>\n");
 		mg_printf(conn, "            <tr>\n");
-		mg_printf(conn, "              <td>\n");
-		mg_printf(conn, "                %d\n", index);
-		mg_printf(conn, "              </td>\n");
-		mg_printf(conn, "              <td>\n");
-		mg_printf(conn, "                %f\n",
-				bayrepo_get_result(item->net, index));
-		mg_printf(conn, "              </td>\n");
+		mg_printf(conn, "              <th>Result output</th>\n");
+		mg_printf(conn, "              <th>Result value</th>\n");
 		mg_printf(conn, "            </tr>\n");
+		for (index = 0; index < item->outputs; index++) {
+			mg_printf(conn, "            <tr>\n");
+			mg_printf(conn, "              <td>\n");
+			mg_printf(conn, "                %d\n", index);
+			mg_printf(conn, "              </td>\n");
+			mg_printf(conn, "              <td>\n");
+			mg_printf(conn, "                %f\n",
+					bayrepo_get_result(item->net, index));
+			mg_printf(conn, "              </td>\n");
+			mg_printf(conn, "            </tr>\n");
+		}
+		mg_printf(conn, "          </table>\n");
+		mg_printf(conn, "\n");
+		mg_printf(conn, "        </td>\n");
+		mg_printf(conn, "      </tr>\n");
+		mg_printf(conn, "      <tr>\n");
+		mg_printf(conn, "        <td>\n");
+		mg_printf(conn,
+				"          <form action=\"%s/%d\" method=\"POST\" enctype=\"multipart/form-data\">\n",
+				ADD_TRAIN_FILE, id);
+		mg_printf(conn,
+				"            <label for=\"file_train1\">Input training parameters file</label>\n");
+		mg_printf(conn,
+				"            <input id=\"file_train1\" type=\"file\" name=\"tin1\"><br>\n");
+		mg_printf(conn, "            <input type=\"submit\" value=\"Send\">\n");
+		mg_printf(conn, "          </form>\n");
+		mg_printf(conn, "          <form action=\"%s/%d\" method=\"POST\">\n",
+		ADD_TRAINP, id);
+		for (index = 0; index < item->inputs; index++) {
+			mg_printf(conn,
+					"            <label for=\"file_train2_%d\">Input parameter train %d</label>\n",
+					index, index);
+			mg_printf(conn,
+					"            <input id=\"file_train2_%d\" type=\"text\" name=\"tin2_%d\"><br>\n",
+					index, index);
+		}
+		for (index = 0; index < item->outputs; index++) {
+			mg_printf(conn,
+					"            <label for=\"file_train_exp2_%d\">Result expected %d</label>\n",
+					index, index);
+			mg_printf(conn,
+					"            <input id=\"file_train_exp2_%d\" type=\"text\" name=\"tine2_%d\"><br>\n",
+					index, index);
+		}
+		mg_printf(conn, "            <input type=\"submit\" value=\"Send\">\n");
+		mg_printf(conn, "          </form>\n");
+		mg_printf(conn, "        </td>\n");
+		mg_printf(conn, "        <td>\n");
+		bayrepo_decorator dc = { (void*) conn, web_GetHandler_print_header,
+				web_GetHandler_print_footer, web_GetHandler_print_pret,
+				web_GetHandler_print_post, web_GetHandler_print };
+		bayrepo_print_matrix_custom(item->net, &dc);
+		mg_printf(conn, "        </td>\n");
+		mg_printf(conn, "      </tr>\n");
 	}
-	mg_printf(conn, "          </table>\n");
-	mg_printf(conn, "\n");
-	mg_printf(conn, "        </td>\n");
-	mg_printf(conn, "      </tr>\n");
-	mg_printf(conn, "      <tr>\n");
-	mg_printf(conn, "        <td>\n");
-	mg_printf(conn,
-			"          <form action=\"%s/%d\" method=\"POST\" enctype=\"multipart/form-data\">\n",
-			ADD_TRAIN_FILE, id);
-	mg_printf(conn,
-			"            <label for=\"file_train1\">Input training parameters file</label>\n");
-	mg_printf(conn,
-			"            <input id=\"file_train1\" type=\"file\" name=\"tin1\"><br>\n");
-	mg_printf(conn, "            <input type=\"submit\" value=\"Send\">\n");
-	mg_printf(conn, "          </form>\n");
-	mg_printf(conn, "          <form action=\"%s/%d\" method=\"POST\">\n",
-	ADD_TRAINP, id);
-	for (index = 0; index < item->inputs; index++) {
-		mg_printf(conn,
-				"            <label for=\"file_train2_%d\">Input parameter train %d</label>\n",
-				index, index);
-		mg_printf(conn,
-				"            <input id=\"file_train2_%d\" type=\"text\" name=\"tin2_%d\"><br>\n",
-				index, index);
-	}
-	for (index = 0; index < item->outputs; index++) {
-		mg_printf(conn,
-				"            <label for=\"file_train_exp2_%d\">Result expected %d</label>\n",
-				index, index);
-		mg_printf(conn,
-				"            <input id=\"file_train_exp2_%d\" type=\"text\" name=\"tine2_%d\"><br>\n",
-				index, index);
-	}
-	mg_printf(conn, "            <input type=\"submit\" value=\"Send\">\n");
-	mg_printf(conn, "          </form>\n");
-	mg_printf(conn, "        </td>\n");
-	mg_printf(conn, "        <td>\n");
-	bayrepo_decorator dc = { (void *) conn, web_GetHandler_print_header,
-			web_GetHandler_print_footer, web_GetHandler_print_pret,
-			web_GetHandler_print_post, web_GetHandler_print };
-	bayrepo_print_matrix_custom(item->net, &dc);
-	mg_printf(conn, "        </td>\n");
-	mg_printf(conn, "      </tr>\n");
 	mg_printf(conn, "    </table>\n");
 
 	pthread_rwlock_unlock(&m_globalNeuro);

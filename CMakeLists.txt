@@ -3,8 +3,10 @@ cmake_minimum_required(VERSION 2.8)
 project(bayrepo_neuro_farm)
 
 execute_process (
-    COMMAND bash -c "make -C civetweb COPT='-DNO_SSL -DNO_SSL_DL' lib"
+    COMMAND bash -c "make -C civetweb COPT='-DNO_SSL -DNO_SSL_DL -g -O0' lib"
 )
+
+add_compile_options(-g -O0)
 
 set(SOURCE_EXE neuro_web.c neuro.c)
 

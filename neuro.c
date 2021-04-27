@@ -839,18 +839,13 @@ activation *activ_l;
 
 static char *bayrepo_reallocate_buffer(char *buffer, char *newdata, int *len,
 		int newlen) {
-	char *new_buff = (char *) malloc(*len + newlen);
-	if (!new_buff) {
+	buffer = (char *) realloc(buffer, *len + newlen);
+	if (!buffer) {
 		return NULL;
 	}
-	if (buffer) {
-		memcpy(new_buff, buffer, *len);
-	}
-	memcpy(new_buff + *len, newdata, newlen);
-	if (buffer)
-		free(buffer);
+	memcpy(buffer + *len, newdata, newlen);
 	*len = *len + newlen;
-	return new_buff;
+	return buffer;
 }
 
 int bayrepo_save_to_buffer(void *blob, char **buffer) {
