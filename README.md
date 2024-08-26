@@ -17,4 +17,4 @@ cmake .
 make
 
 
-Usage example: https://putey.net/post/eksperimenty-s-neirosetyami
+Usage example: https://brepo.ru/post/eksperimenty-s-neirosetyami
